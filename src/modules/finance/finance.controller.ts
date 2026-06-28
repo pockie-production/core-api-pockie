@@ -6,7 +6,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 @ApiTags('finance')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('api/v1')
+@Controller()
 export class FinanceController {
   constructor(private readonly financeService: FinanceService) {}
 

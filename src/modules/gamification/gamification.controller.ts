@@ -6,7 +6,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 @ApiTags('gamification')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('api/v1')
+@Controller()
 export class GamificationController {
   constructor(private readonly gamificationService: GamificationService) {}
 
