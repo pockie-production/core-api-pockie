@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Param, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { EnduserEkycService } from './enduser-ekyc.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -18,12 +19,17 @@ export class EnduserEkycController {
 
   @Post(':id/documents')
   @Roles(RoleCode.END_USER)
+  @UseInterceptors(FileInterceptor('file'))
   async uploadDocument(
     @Param('id') id: string,
-    @Body() body: { documentType: string, side: string, fileId: string },
+    @Body() body: { documentType: string, side: string },
+    @UploadedFile() file: Express.Multer.File,
     @Request() req: any
   ) {
-    return this.enduserEkycService.uploadDocument(id, req.user.id, body);
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    return this.enduserEkycService.uploadDocument(id, req.user.id, body, file);
   }
 
   @Post(':id/submit')

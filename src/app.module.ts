@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { InternalAuthModule } from './modules/internal-auth/internal-auth.module';
 import { InternalDashboardModule } from './modules/internal-dashboard/internal-dashboard.module';
 import { VnptEkycModule } from './integrations/vnpt-ekyc/vnpt-ekyc.module';
+import { MinioModule } from './integrations/minio/minio.module';
 import { InternalEkycModule } from './modules/internal-ekyc/internal-ekyc.module';
 import { EnduserEkycModule } from './modules/enduser-ekyc/enduser-ekyc.module';
 
@@ -18,6 +19,7 @@ import { EnduserEkycModule } from './modules/enduser-ekyc/enduser-ekyc.module';
     InternalAuthModule,
     InternalDashboardModule,
     VnptEkycModule,
+    MinioModule,
     InternalEkycModule,
     EnduserEkycModule,
   ],
