@@ -202,25 +202,33 @@ export class InternalEkycService {
           reason: 'Manual approval',
         },
       }),
+      ...(note
+        ? [
+            this.prisma.ekycInternalNote.create({
+              data: {
+                sessionId: id,
+                authorId: actorId,
+                note,
+              },
+            }),
+          ]
+        : []),
       this.prisma.adminActionLog.create({
         data: {
           actorUserId: actorId,
           action: 'EKYC_MANUAL_APPROVE',
-          targetType: 'EkycSession',
+          targetType: 'EKYC_SESSION',
           targetId: id,
-          payload: { previousStatus: session.status, newStatus: EkycSessionStatus.VERIFIED, note },
+          payload: {
+            note,
+            previousStatus: session.status,
+            newStatus: EkycSessionStatus.VERIFIED,
+          },
         },
       }),
-      ...(note
-        ? [
-            this.prisma.ekycInternalNote.create({
-              data: { sessionId: id, authorId: actorId, note },
-            }),
-          ]
-        : []),
     ]);
 
-    return { success: true };
+    return { message: 'Session approved successfully' };
   }
 
   async rejectSession(id: string, actorId: string, reason: string, note?: string) {
@@ -243,28 +251,37 @@ export class InternalEkycService {
         data: {
           sessionId: id,
           decision: EkycFinalDecision.FAIL,
-          reason: `Manual reject: ${reason}`,
-        },
-      }),
-      this.prisma.adminActionLog.create({
-        data: {
-          actorUserId: actorId,
-          action: 'EKYC_REJECT',
-          targetType: 'EkycSession',
-          targetId: id,
-          payload: { previousStatus: session.status, newStatus: EkycSessionStatus.REJECTED, reason, note },
+          reason: `Manual rejection: ${reason}`,
         },
       }),
       ...(note
         ? [
             this.prisma.ekycInternalNote.create({
-              data: { sessionId: id, authorId: actorId, note },
+              data: {
+                sessionId: id,
+                authorId: actorId,
+                note,
+              },
             }),
           ]
         : []),
+      this.prisma.adminActionLog.create({
+        data: {
+          actorUserId: actorId,
+          action: 'EKYC_REJECT',
+          targetType: 'EKYC_SESSION',
+          targetId: id,
+          payload: {
+            reason,
+            note,
+            previousStatus: session.status,
+            newStatus: EkycSessionStatus.REJECTED,
+          },
+        },
+      }),
     ]);
 
-    return { success: true };
+    return { message: 'Session rejected successfully' };
   }
 
   async requestRetry(id: string, actorId: string, reason: string, note?: string) {
@@ -281,7 +298,7 @@ export class InternalEkycService {
       }),
       this.prisma.user.update({
         where: { id: session.userId },
-        data: { kycStatus: KycStatus.PENDING }, // Go back to pending or NOT_STARTED
+        data: { kycStatus: KycStatus.PENDING },
       }),
       this.prisma.ekycDecisionLog.create({
         data: {
@@ -294,7 +311,7 @@ export class InternalEkycService {
         data: {
           actorUserId: actorId,
           action: 'EKYC_REQUEST_RETRY',
-          targetType: 'EkycSession',
+          targetType: 'EKYC_SESSION',
           targetId: id,
           payload: { previousStatus: session.status, newStatus: EkycSessionStatus.RETRY_REQUIRED, reason, note },
         },
@@ -317,13 +334,17 @@ export class InternalEkycService {
 
     await this.prisma.$transaction([
       this.prisma.ekycInternalNote.create({
-        data: { sessionId: id, authorId: actorId, note },
+        data: {
+          sessionId: id,
+          authorId: actorId,
+          note,
+        },
       }),
       this.prisma.adminActionLog.create({
         data: {
           actorUserId: actorId,
           action: 'EKYC_ADD_NOTE',
-          targetType: 'EkycSession',
+          targetType: 'EKYC_SESSION',
           targetId: id,
           payload: { note },
         },

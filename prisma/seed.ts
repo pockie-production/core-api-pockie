@@ -162,17 +162,12 @@ async function main() {
   // 5. Seed Mock eKYC Data
   console.log('Seeding Mock eKYC Sessions...');
   
-  // Create an end user for eKYC
   const ekycUserEmail = 'ekyc.user@pockie.local';
   const ekycUserHash = await bcrypt.hash('Password@123', 10);
   const ekycUser = await prisma.user.upsert({
     where: { email: ekycUserEmail },
     update: { kycStatus: 'PENDING' },
-    create: {
-      email: ekycUserEmail,
-      passwordHash: ekycUserHash,
-      kycStatus: 'PENDING',
-    }
+    create: { email: ekycUserEmail, passwordHash: ekycUserHash, kycStatus: 'PENDING' }
   });
   
   await prisma.userRole.upsert({
@@ -187,92 +182,106 @@ async function main() {
     create: { userId: ekycUser.id, fullName: 'Nguyen Van A', displayName: 'Nguyen A' }
   });
 
-  // Create a pending session
-  const session = await prisma.ekycSession.create({
-    data: {
-      userId: ekycUser.id,
-      clientSession: 'mock_client_session',
-      status: 'PENDING',
-      finalDecision: 'PENDING',
-      riskLevel: 'LOW',
-    }
-  });
+  async function createMockSession(status: string, finalDecision: string, riskLevel: string, overrideOcr: any = {}, overrideCard: any = {}, overrideFace: any = {}, overrideCompare: any = {}, reason: string) {
+    const session = await prisma.ekycSession.create({
+      data: {
+        userId: ekycUser.id,
+        clientSession: 'mock_client_session_' + Date.now() + Math.floor(Math.random() * 1000),
+        status: status as any,
+        finalDecision: finalDecision as any,
+        riskLevel: riskLevel as any,
+      }
+    });
 
-  // Create OCR Result
-  await prisma.ekycOcrResult.create({
-    data: {
-      sessionId: session.id,
-      statusCode: 200,
-      message: 'Success',
-      documentType: 'CCCD_CHIP',
-      tampering: [
-        { code: 'id_quoc_huy_bi_catt', msg: 'Quốc huy bị cắt' }
-      ],
-      warnings: [
-        { code: 'anh_dau_vao_mo_nhoe', msg: 'Ảnh đầu vào mờ nhòe' }
-      ],
-      fields: [
-        { fieldName: 'id', fieldValue: '001099001122', fieldProb: 0.99 },
-        { fieldName: 'name', fieldValue: 'NGUYỄN VĂN A', fieldProb: 0.99 },
-        { fieldName: 'birth_day', fieldValue: '01/01/1990', fieldProb: 0.99 },
-      ]
-    }
-  });
+    await prisma.ekycOcrResult.create({
+      data: {
+        sessionId: session.id,
+        statusCode: 200,
+        message: 'Success',
+        tampering: {
+          create: overrideOcr.tampering || []
+        },
+        warnings: {
+          create: overrideOcr.warnings || []
+        },
+        fields: {
+          create: [
+            { fieldName: 'id', fieldValue: '001099001122', probability: 0.99 },
+            { fieldName: 'name', fieldValue: 'NGUYỄN VĂN A', probability: 0.99 },
+            { fieldName: 'birth_day', fieldValue: '01/01/1990', probability: 0.99 },
+          ]
+        }
+      }
+    });
 
-  // Create Liveness
-  await prisma.ekycLivenessCardResult.create({
-    data: {
-      sessionId: session.id,
-      liveness: 'success',
-      livenessMsg: 'Real document',
-      fakeLiveness: false,
-      fakePrintPhoto: false,
-      faceSwapping: false,
-    }
-  });
+    await prisma.ekycLivenessCardResult.create({
+      data: {
+        sessionId: session.id,
+        liveness: overrideCard.liveness || 'success',
+        livenessMsg: 'Real document',
+        fakeLiveness: overrideCard.fakeLiveness || false,
+        fakePrintPhoto: false,
+        faceSwapping: overrideCard.faceSwapping || false,
+      }
+    });
 
-  await prisma.ekycFaceLivenessResult.create({
-    data: {
-      sessionId: session.id,
-      liveness: 'success',
-      livenessMsg: 'Real face',
-      livenessProb: 0.05,
-      blurFace: 'no',
-      isEyeOpen: 'yes',
-      multipleFaces: false,
-    }
-  });
+    await prisma.ekycFaceLivenessResult.create({
+      data: {
+        sessionId: session.id,
+        liveness: overrideFace.liveness || 'success',
+        livenessMsg: 'Real face',
+        livenessProb: 0.05,
+        blurFace: overrideFace.blurFace || 'no',
+        isEyeOpen: 'yes',
+        multipleFaces: overrideFace.multipleFaces || false,
+      }
+    });
 
-  await prisma.ekycFaceCompareResult.create({
-    data: {
-      sessionId: session.id,
-      msg: 'MATCH',
-      prob: 0.99,
-      matchWarning: 'no',
-      multipleFaces: false,
-    }
-  });
+    await prisma.ekycFaceCompareResult.create({
+      data: {
+        sessionId: session.id,
+        msg: overrideCompare.msg || 'MATCH',
+        prob: 0.99,
+        matchWarning: overrideCompare.matchWarning || 'no',
+        multipleFaces: false,
+      }
+    });
 
-  // Create Decision Log
-  await prisma.ekycDecisionLog.create({
-    data: {
-      sessionId: session.id,
-      decision: 'REVIEW',
-      reason: 'Auto-evaluation: Tampering warning, Image quality warning',
-    }
-  });
+    await prisma.ekycMaskResult.create({
+        data: {
+            sessionId: session.id,
+            masked: overrideFace.masked || 'no'
+        }
+    });
 
-  // Update session status to REVIEW_REQUIRED
-  await prisma.ekycSession.update({
-    where: { id: session.id },
-    data: {
-      status: 'REVIEW_REQUIRED',
-      finalDecision: 'REVIEW',
-      riskLevel: 'HIGH',
-    }
-  });
+    await prisma.ekycDecisionLog.create({
+      data: {
+        sessionId: session.id,
+        decision: finalDecision as any,
+        reason: reason,
+      }
+    });
+    console.log(`Seeded mock case (${finalDecision}): ${session.id}`);
+  }
 
-  console.log(`Seeded mock eKYC session: ${session.id}`);
+  // 10 mock cases
+  // 3 VERIFIED
+  await createMockSession('VERIFIED', 'PASS', 'LOW', {}, {}, {}, {}, 'Auto-approval');
+  await createMockSession('VERIFIED', 'PASS', 'LOW', {}, {}, {}, {}, 'Auto-approval');
+  await createMockSession('VERIFIED', 'PASS', 'LOW', {}, {}, {}, {}, 'Auto-approval');
+  
+  // 3 REVIEW_REQUIRED
+  await createMockSession('REVIEW_REQUIRED', 'REVIEW', 'MEDIUM', { warnings: [{ code: 'id_xac_suat_thap', msg: 'ID confidence is low' }] }, {}, {}, {}, 'Warning found: id_xac_suat_thap');
+  await createMockSession('REVIEW_REQUIRED', 'REVIEW', 'MEDIUM', {}, {}, { masked: 'yes' }, {}, 'Warning found: mask face detected');
+  await createMockSession('REVIEW_REQUIRED', 'REVIEW', 'MEDIUM', {}, {}, {}, { matchWarning: 'yes' }, 'Warning found: face match warning');
+  
+  // 2 RETRY_REQUIRED
+  await createMockSession('RETRY_REQUIRED', 'RETRY', 'MEDIUM', { warnings: [{ code: 'anh_dau_vao_mo_nhoe', msg: 'Image blurred' }] }, {}, {}, {}, 'Retry required: image blurred');
+  await createMockSession('RETRY_REQUIRED', 'RETRY', 'MEDIUM', {}, {}, { multipleFaces: true }, {}, 'Retry required: multiple faces detected');
+  
+  // 2 REJECTED
+  await createMockSession('REJECTED', 'FAIL', 'HIGH', {}, {}, {}, { msg: 'NOMATCH' }, 'Rejection: Face mismatch');
+  await createMockSession('REJECTED', 'FAIL', 'CRITICAL', {}, { fakeLiveness: true }, {}, {}, 'Rejection: Fake document liveness detected');
 
   console.log('Seeding complete.');
 }
