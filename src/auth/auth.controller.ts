@@ -1,7 +1,6 @@
 import { Controller, Post, Body, Get, UseGuards, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { SignupDto, LoginDto, RefreshTokenDto } from './dto/auth.dto';
-import { AuthGuard } from '@nestjs/passport';
+import { SignupDto, LoginDto, RefreshTokenDto, FirebaseLoginDto } from './dto/auth.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
@@ -25,21 +24,10 @@ export class AuthController {
     return this.authService.refresh(dto.refreshToken);
   }
 
-  // Google OAuth Endpoints
-  @Get('google')
-  @UseGuards(AuthGuard('google'))
-  async googleAuth(@Req() req) {
-    // Initiates the Google OAuth flow
-  }
-
-  @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  async googleAuthRedirect(@Req() req) {
-    // req.user will contain the user object returned from validateOAuthLogin
-    return {
-      message: 'Google login successful',
-      data: req.user,
-    };
+  @Post('firebase/login')
+  @ApiOperation({ summary: 'Login using Firebase ID Token from client Google Sign-in' })
+  async firebaseLogin(@Body() dto: FirebaseLoginDto) {
+    return this.authService.verifyFirebaseToken(dto.idToken);
   }
 
   @Get('me')

@@ -57,3 +57,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Ignore AI Agent Guidelines
 ai_agent_guidelines/
+service.json

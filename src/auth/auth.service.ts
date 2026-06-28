@@ -2,19 +2,31 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { SignupDto, LoginDto } from './dto/auth.dto';
 import { RoleCode, KycStatus } from '@prisma/client';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import * as path from 'path';
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
   ) {}
+
+  onModuleInit() {
+    if (!getApps().length) {
+      initializeApp({
+        credential: cert(path.resolve(process.cwd(), 'service.json')),
+      });
+    }
+  }
 
   async signup(dto: SignupDto) {
     const existingUser = await this.prisma.user.findUnique({
@@ -90,34 +102,43 @@ export class AuthService {
     }
   }
 
-  async validateOAuthLogin(profile: any): Promise<any> {
-    const email = profile.emails[0].value;
+  async verifyFirebaseToken(idToken: string) {
+    try {
+      const decodedToken = await getAuth().verifyIdToken(idToken);
+      const email = decodedToken.email;
 
-    let user = await this.prisma.user.findUnique({
-      where: { email },
-      include: { roles: true },
-    });
+      if (!email) {
+        throw new UnauthorizedException('Firebase token does not contain an email');
+      }
 
-    if (!user) {
-      // Create user if they don't exist
-      user = await this.prisma.user.create({
-        data: {
-          email,
-          passwordHash: '', // OAuth users don't have a password
-          kycStatus: KycStatus.NOT_STARTED,
-          roles: {
-            create: {
-              role: RoleCode.END_USER,
+      let user = await this.prisma.user.findUnique({
+        where: { email },
+        include: { roles: true },
+      });
+
+      if (!user) {
+        // Create user if they don't exist
+        user = await this.prisma.user.create({
+          data: {
+            email,
+            passwordHash: '', // OAuth users don't have a password
+            kycStatus: KycStatus.NOT_STARTED,
+            roles: {
+              create: {
+                role: RoleCode.END_USER,
+              },
             },
           },
-        },
-        include: {
-          roles: true,
-        },
-      });
-    }
+          include: {
+            roles: true,
+          },
+        });
+      }
 
-    return this.generateTokens(user.id, user.roles.map((r) => r.role));
+      return this.generateTokens(user.id, user.roles.map((r) => r.role));
+    } catch (error) {
+      throw new UnauthorizedException('Invalid Firebase ID token');
+    }
   }
 
   private async generateTokens(userId: string, roles: RoleCode[]) {
