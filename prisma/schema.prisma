@@ -86,8 +86,8 @@ model User {
   status       UserStatus @default(ACTIVE)
   kycStatus    KycStatus  @default(NOT_STARTED)
 
-  profile      UserProfile?
-  roles        UserRole[]
+  profile       UserProfile?
+  roles         UserRole[]
   refreshTokens RefreshToken[]
 
   chatSessions ChatSession[]
@@ -98,29 +98,31 @@ model User {
 
   organizationMembers OrganizationMember[]
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  EkycSession      EkycSession[]
+  EkycInternalNote EkycInternalNote[]
 }
 
 model UserProfile {
-  id          String  @id @default(uuid())
-  userId      String  @unique
-  fullName    String?
-  displayName String?
+  id           String  @id @default(uuid())
+  userId       String  @unique
+  fullName     String?
+  displayName  String?
   avatarFileId String?
 
-  user        User    @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model UserRole {
-  id        String   @id @default(uuid())
-  userId    String
-  role      RoleCode
+  id     String   @id @default(uuid())
+  userId String
+  role   RoleCode
 
-  user      User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   createdAt DateTime @default(now())
 
@@ -128,23 +130,23 @@ model UserRole {
 }
 
 model RefreshToken {
-  id           String   @id @default(uuid())
-  userId       String
-  tokenHash    String
-  expiresAt    DateTime
-  revokedAt    DateTime?
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
 
-  user         User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model Organization {
-  id        String           @id @default(uuid())
-  name      String
-  type      OrganizationType
-  taxCode   String?
-  status    String           @default("ACTIVE")
+  id      String           @id @default(uuid())
+  name    String
+  type    OrganizationType
+  taxCode String?
+  status  String           @default("ACTIVE")
 
   members   OrganizationMember[]
   campaigns Campaign[]
@@ -155,171 +157,172 @@ model Organization {
 }
 
 model OrganizationMember {
-  id             String @id @default(uuid())
+  id             String  @id @default(uuid())
   organizationId String
   userId         String
   title          String?
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  user           User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
 
-  createdAt      DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([organizationId, userId])
 }
 
 model EkycVerification {
-  id             String    @id @default(uuid())
-  userId         String
-  provider       String    @default("VNPT")
-  providerRef    String?
-  status         KycStatus @default(PENDING)
-  resultJson     Json?
-  frontFileId    String?
-  backFileId     String?
-  selfieFileId   String?
-  verifiedAt     DateTime?
+  id           String    @id @default(uuid())
+  userId       String
+  provider     String    @default("VNPT")
+  providerRef  String?
+  status       KycStatus @default(PENDING)
+  resultJson   Json?
+  frontFileId  String?
+  backFileId   String?
+  selfieFileId String?
+  verifiedAt   DateTime?
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model File {
-  id          String      @id @default(uuid())
-  ownerId     String?
-  bucket      String
-  objectKey   String
+  id           String      @id @default(uuid())
+  ownerId      String?
+  bucket       String
+  objectKey    String
   originalName String?
-  mimeType    String?
-  sizeBytes   Int?
-  purpose     FilePurpose @default(OTHER)
+  mimeType     String?
+  sizeBytes    Int?
+  purpose      FilePurpose @default(OTHER)
 
-  owner       User?       @relation(fields: [ownerId], references: [id])
+  owner User? @relation(fields: [ownerId], references: [id])
 
-  createdAt   DateTime    @default(now())
+  createdAt    DateTime       @default(now())
+  EkycDocument EkycDocument[]
 }
 
 model OcrJob {
-  id          String   @id @default(uuid())
-  userId      String
-  fileId      String
-  provider    String   @default("VNPT")
-  status      String   @default("PENDING")
-  resultJson  Json?
+  id           String  @id @default(uuid())
+  userId       String
+  fileId       String
+  provider     String  @default("VNPT")
+  status       String  @default("PENDING")
+  resultJson   Json?
   errorMessage String?
 
-  user        User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ChatSession {
-  id          String      @id @default(uuid())
-  userId      String
-  channel     ChatChannel @default(MAIN_CHAT)
-  title       String?
-  metadata    Json?
+  id       String      @id @default(uuid())
+  userId   String
+  channel  ChatChannel @default(MAIN_CHAT)
+  title    String?
+  metadata Json?
 
-  user        User        @relation(fields: [userId], references: [id])
-  messages    ChatMessage[]
+  user     User          @relation(fields: [userId], references: [id])
+  messages ChatMessage[]
 
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ChatMessage {
-  id          String   @id @default(uuid())
-  sessionId   String
-  role        ChatRole
-  content     String
-  metadata    Json?
+  id        String   @id @default(uuid())
+  sessionId String
+  role      ChatRole
+  content   String
+  metadata  Json?
 
-  session     ChatSession @relation(fields: [sessionId], references: [id])
+  session ChatSession @relation(fields: [sessionId], references: [id])
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model PetProfile {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  name        String   @default("Pockie")
-  level       Int      @default(1)
-  mood        String   @default("NORMAL")
-  metadata    Json?
+  id       String @id @default(uuid())
+  userId   String @unique
+  name     String @default("Pockie")
+  level    Int    @default(1)
+  mood     String @default("NORMAL")
+  metadata Json?
 
-  user        User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model PetInteraction {
-  id          String   @id @default(uuid())
-  userId      String
-  eventName   String
-  payload     Json?
+  id        String @id @default(uuid())
+  userId    String
+  eventName String
+  payload   Json?
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model UserStreak {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  currentDays Int      @default(0)
-  longestDays Int      @default(0)
+  id             String    @id @default(uuid())
+  userId         String    @unique
+  currentDays    Int       @default(0)
+  longestDays    Int       @default(0)
   lastActiveDate DateTime?
 
-  user        User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
-  updatedAt   DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 model Voucher {
-  id             String   @id @default(uuid())
-  organizationId String?
-  title          String
-  description    String?
-  code           String?
-  totalQuantity  Int?
+  id                String    @id @default(uuid())
+  organizationId    String?
+  title             String
+  description       String?
+  code              String?
+  totalQuantity     Int?
   remainingQuantity Int?
-  startsAt       DateTime?
-  endsAt         DateTime?
-  metadata       Json?
+  startsAt          DateTime?
+  endsAt            DateTime?
+  metadata          Json?
 
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  claims         VoucherClaim[]
+  organization Organization?  @relation(fields: [organizationId], references: [id])
+  claims       VoucherClaim[]
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model VoucherClaim {
-  id          String   @id @default(uuid())
-  voucherId   String
-  userId      String
-  status      String   @default("CLAIMED")
-  claimedAt   DateTime @default(now())
-  redeemedAt  DateTime?
+  id         String    @id @default(uuid())
+  voucherId  String
+  userId     String
+  status     String    @default("CLAIMED")
+  claimedAt  DateTime  @default(now())
+  redeemedAt DateTime?
 
-  voucher     Voucher  @relation(fields: [voucherId], references: [id])
+  voucher Voucher @relation(fields: [voucherId], references: [id])
 
   @@unique([voucherId, userId])
 }
 
 model Trend {
-  id          String      @id @default(uuid())
-  source      String      @default("VNSOCIAL")
-  externalId  String?
-  title       String
-  summary     String?
-  category    String?
-  score       Float?
-  status      TrendStatus @default(PENDING_REVIEW)
-  rawJson     Json?
+  id         String      @id @default(uuid())
+  source     String      @default("VNSOCIAL")
+  externalId String?
+  title      String
+  summary    String?
+  category   String?
+  score      Float?
+  status     TrendStatus @default(PENDING_REVIEW)
+  rawJson    Json?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Campaign {
@@ -332,36 +335,36 @@ model Campaign {
   startsAt       DateTime?
   endsAt         DateTime?
 
-  organization   Organization   @relation(fields: [organizationId], references: [id])
-  reports        CampaignReport[]
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  reports      CampaignReport[]
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model CampaignReport {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   campaignId  String
   title       String
   content     String
   metricsJson Json?
   aiSummary   String?
 
-  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  campaign Campaign @relation(fields: [campaignId], references: [id])
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model AnalyticsEvent {
-  id          String   @id @default(uuid())
-  userId      String?
-  sessionId   String?
-  eventName   String
-  page        String?
-  feature     String?
-  payload     Json?
+  id        String  @id @default(uuid())
+  userId    String?
+  sessionId String?
+  eventName String
+  page      String?
+  feature   String?
+  payload   Json?
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([eventName])
   @@index([feature])
@@ -369,24 +372,24 @@ model AnalyticsEvent {
 }
 
 model AdminActionLog {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   actorUserId String
   action      String
   targetType  String?
   targetId    String?
   payload     Json?
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model Permission {
-  id          String   @id @default(uuid())
-  code        String   @unique
+  id          String  @id @default(uuid())
+  code        String  @unique
   description String?
 
   rolePermissions RolePermission[]
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model RolePermission {
@@ -394,9 +397,9 @@ model RolePermission {
   role         RoleCode
   permissionId String
 
-  permission   Permission @relation(fields: [permissionId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([role, permissionId])
 }
@@ -416,7 +419,269 @@ model LoginAttempt {
   ipAddress String?
   userAgent String?
   result    LoginAttemptResult
-  
-  createdAt DateTime           @default(now())
+
+  createdAt DateTime @default(now())
 }
 
+// ==========================================
+// EKYC REVIEW SYSTEM
+// ==========================================
+
+enum EkycSessionStatus {
+  DRAFT
+  UPLOADING
+  PROCESSING
+  REVIEW_REQUIRED
+  VERIFIED
+  REJECTED
+  RETRY_REQUIRED
+  EXPIRED
+  FAILED
+}
+
+enum EkycFinalDecision {
+  PASS
+  REVIEW
+  FAIL
+  RETRY
+  UNKNOWN
+}
+
+enum EkycDocumentSide {
+  FRONT
+  BACK
+  SELFIE
+  FACE_NEAR
+  FACE_FAR
+  SCAN_3D
+  UNKNOWN
+}
+
+enum EkycDocumentType {
+  CCCD
+  CMND_9
+  CMND_12
+  CCCD_CHIP
+  PASSPORT
+  DRIVER_LICENSE
+  MILITARY_ID
+  FACE
+  UNKNOWN
+}
+
+enum EkycProviderApiName {
+  UPLOAD_FILE
+  OCR_ID
+  LIVENESS_CARD
+  FACE_LIVENESS_2D
+  FACE_LIVENESS_3D
+  FACE_COMPARE
+  FACE_COMPARE_GENERAL
+  MASK_FACE
+}
+
+enum EkycRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  UNKNOWN
+}
+
+model EkycSession {
+  id             String            @id @default(uuid())
+  userId         String
+  status         EkycSessionStatus @default(DRAFT)
+  finalDecision  EkycFinalDecision @default(UNKNOWN)
+  riskLevel      EkycRiskLevel     @default(UNKNOWN)
+  decisionReason String?
+  clientSession  String?
+
+  user             User                  @relation(fields: [userId], references: [id])
+  documents        EkycDocument[]
+  decisionLogs     EkycDecisionLog[]
+  internalNotes    EkycInternalNote[]
+  providerRequests EkycProviderRequest[]
+
+  ocrResult    EkycOcrResult?
+  livenessCard EkycLivenessCardResult?
+  faceLiveness EkycFaceLivenessResult?
+  faceCompare  EkycFaceCompareResult?
+  maskResult   EkycMaskResult?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EkycDocument {
+  id           String           @id @default(uuid())
+  sessionId    String
+  side         EkycDocumentSide
+  documentType EkycDocumentType @default(UNKNOWN)
+  fileId       String?
+
+  session EkycSession @relation(fields: [sessionId], references: [id])
+  file    File?       @relation(fields: [fileId], references: [id])
+
+  vnptUpload VnptFileUpload?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VnptFileUpload {
+  id            String   @id @default(uuid())
+  documentId    String   @unique
+  vnptHash      String
+  hashExpiresAt DateTime
+  rawResponse   Json?
+
+  document EkycDocument @relation(fields: [documentId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model EkycOcrResult {
+  id          String  @id @default(uuid())
+  sessionId   String  @unique
+  statusCode  Int
+  message     String?
+  rawResponse Json?
+
+  session   EkycSession            @relation(fields: [sessionId], references: [id])
+  fields    EkycOcrField[]
+  warnings  EkycWarning[]
+  tampering EkycTamperingFinding[]
+
+  createdAt DateTime @default(now())
+}
+
+model EkycOcrField {
+  id          String @id @default(uuid())
+  ocrResultId String
+  fieldName   String
+  fieldValue  String
+  probability Float?
+
+  ocrResult EkycOcrResult @relation(fields: [ocrResultId], references: [id])
+}
+
+model EkycWarning {
+  id          String  @id @default(uuid())
+  ocrResultId String
+  code        String
+  message     String?
+  severity    String  @default("MEDIUM")
+  shouldBlock Boolean @default(false)
+
+  ocrResult EkycOcrResult @relation(fields: [ocrResultId], references: [id])
+}
+
+model EkycTamperingFinding {
+  id          String  @id @default(uuid())
+  ocrResultId String
+  code        String
+  message     String?
+  severity    String  @default("HIGH")
+
+  ocrResult EkycOcrResult @relation(fields: [ocrResultId], references: [id])
+}
+
+model EkycLivenessCardResult {
+  id             String  @id @default(uuid())
+  sessionId      String  @unique
+  liveness       String
+  livenessMsg    String?
+  faceSwapping   Boolean @default(false)
+  fakeLiveness   Boolean @default(false)
+  fakePrintPhoto Boolean @default(false)
+  rawResponse    Json?
+
+  session EkycSession @relation(fields: [sessionId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model EkycFaceLivenessResult {
+  id            String  @id @default(uuid())
+  sessionId     String  @unique
+  mode          String  @default("FACE_2D")
+  liveness      String
+  livenessMsg   String?
+  livenessProb  Float?
+  blurFace      String?
+  isEyeOpen     String?
+  multipleFaces Boolean @default(false)
+  rawResponse   Json?
+
+  session EkycSession @relation(fields: [sessionId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model EkycFaceCompareResult {
+  id            String  @id @default(uuid())
+  sessionId     String  @unique
+  msg           String
+  prob          Float?
+  multipleFaces Boolean @default(false)
+  matchWarning  String?
+  rawResponse   Json?
+
+  session EkycSession @relation(fields: [sessionId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model EkycMaskResult {
+  id          String @id @default(uuid())
+  sessionId   String @unique
+  masked      String
+  rawResponse Json?
+
+  session EkycSession @relation(fields: [sessionId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model EkycProviderRequest {
+  id              String              @id @default(uuid())
+  sessionId       String?
+  provider        String              @default("VNPT")
+  apiName         EkycProviderApiName
+  endpoint        String
+  httpMethod      String              @default("POST")
+  requestPayload  Json?
+  responsePayload Json?
+  statusCode      Int?
+  message         String?
+  errorMessage    String?
+  durationMs      Int?
+
+  session EkycSession? @relation(fields: [sessionId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model EkycDecisionLog {
+  id        String            @id @default(uuid())
+  sessionId String
+  decision  EkycFinalDecision
+  reason    String?
+
+  session EkycSession @relation(fields: [sessionId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model EkycInternalNote {
+  id        String @id @default(uuid())
+  sessionId String
+  authorId  String
+  note      String
+
+  session EkycSession @relation(fields: [sessionId], references: [id])
+  author  User        @relation(fields: [authorId], references: [id])
+
+  createdAt DateTime @default(now())
+}

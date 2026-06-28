@@ -159,6 +159,121 @@ async function main() {
     console.log(`Seeded user: ${u.email} [${u.role}]`);
   }
 
+  // 5. Seed Mock eKYC Data
+  console.log('Seeding Mock eKYC Sessions...');
+  
+  // Create an end user for eKYC
+  const ekycUserEmail = 'ekyc.user@pockie.local';
+  const ekycUserHash = await bcrypt.hash('Password@123', 10);
+  const ekycUser = await prisma.user.upsert({
+    where: { email: ekycUserEmail },
+    update: { kycStatus: 'PENDING' },
+    create: {
+      email: ekycUserEmail,
+      passwordHash: ekycUserHash,
+      kycStatus: 'PENDING',
+    }
+  });
+  
+  await prisma.userRole.upsert({
+    where: { userId_role: { userId: ekycUser.id, role: RoleCode.END_USER } },
+    update: {},
+    create: { userId: ekycUser.id, role: RoleCode.END_USER }
+  });
+
+  await prisma.userProfile.upsert({
+    where: { userId: ekycUser.id },
+    update: { fullName: 'Nguyen Van A', displayName: 'Nguyen A' },
+    create: { userId: ekycUser.id, fullName: 'Nguyen Van A', displayName: 'Nguyen A' }
+  });
+
+  // Create a pending session
+  const session = await prisma.ekycSession.create({
+    data: {
+      userId: ekycUser.id,
+      clientSession: 'mock_client_session',
+      status: 'PENDING',
+      finalDecision: 'PENDING',
+      riskLevel: 'LOW',
+    }
+  });
+
+  // Create OCR Result
+  await prisma.ekycOcrResult.create({
+    data: {
+      sessionId: session.id,
+      statusCode: 200,
+      message: 'Success',
+      documentType: 'CCCD_CHIP',
+      tampering: [
+        { code: 'id_quoc_huy_bi_catt', msg: 'Quốc huy bị cắt' }
+      ],
+      warnings: [
+        { code: 'anh_dau_vao_mo_nhoe', msg: 'Ảnh đầu vào mờ nhòe' }
+      ],
+      fields: [
+        { fieldName: 'id', fieldValue: '001099001122', fieldProb: 0.99 },
+        { fieldName: 'name', fieldValue: 'NGUYỄN VĂN A', fieldProb: 0.99 },
+        { fieldName: 'birth_day', fieldValue: '01/01/1990', fieldProb: 0.99 },
+      ]
+    }
+  });
+
+  // Create Liveness
+  await prisma.ekycLivenessCardResult.create({
+    data: {
+      sessionId: session.id,
+      liveness: 'success',
+      livenessMsg: 'Real document',
+      fakeLiveness: false,
+      fakePrintPhoto: false,
+      faceSwapping: false,
+    }
+  });
+
+  await prisma.ekycFaceLivenessResult.create({
+    data: {
+      sessionId: session.id,
+      liveness: 'success',
+      livenessMsg: 'Real face',
+      livenessProb: 0.05,
+      blurFace: 'no',
+      isEyeOpen: 'yes',
+      multipleFaces: false,
+    }
+  });
+
+  await prisma.ekycFaceCompareResult.create({
+    data: {
+      sessionId: session.id,
+      msg: 'MATCH',
+      prob: 0.99,
+      matchWarning: 'no',
+      multipleFaces: false,
+    }
+  });
+
+  // Create Decision Log
+  await prisma.ekycDecisionLog.create({
+    data: {
+      sessionId: session.id,
+      decision: 'REVIEW',
+      reason: 'Auto-evaluation: Tampering warning, Image quality warning',
+    }
+  });
+
+  // Update session status to REVIEW_REQUIRED
+  await prisma.ekycSession.update({
+    where: { id: session.id },
+    data: {
+      status: 'REVIEW_REQUIRED',
+      finalDecision: 'REVIEW',
+      riskLevel: 'HIGH',
+    }
+  });
+
+  console.log(`Seeded mock eKYC session: ${session.id}`);
+
   console.log('Seeding complete.');
 }
 
