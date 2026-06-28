@@ -5,7 +5,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RoleCode } from '@prisma/client';
 
-@Controller('api/v1/internal/ekyc')
+@Controller('internal/ekyc')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class InternalEkycController {
   constructor(private readonly internalEkycService: InternalEkycService) {}
