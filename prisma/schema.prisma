@@ -27,8 +27,11 @@ enum RoleCode {
   SUPER_ADMIN
   INTERNAL_ADMIN
   CONTENT_ADMIN
+  SUPPORT_STAFF
   BANK_ADMIN
+  BANK_MARKETER
   BANK_ANALYST
+  BANK_VIEWER
 }
 
 enum OrganizationType {
@@ -397,3 +400,23 @@ model RolePermission {
 
   @@unique([role, permissionId])
 }
+
+enum LoginAttemptResult {
+  SUCCESS
+  FAILED_PASSWORD
+  USER_NOT_FOUND
+  USER_SUSPENDED
+  RATE_LIMITED
+  INTERNAL_ACCESS_DENIED
+}
+
+model LoginAttempt {
+  id        String             @id @default(uuid())
+  email     String
+  ipAddress String?
+  userAgent String?
+  result    LoginAttemptResult
+  
+  createdAt DateTime           @default(now())
+}
+

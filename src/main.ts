@@ -9,6 +9,10 @@ async function bootstrap() {
   // Validation
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
+  // Global Prefix
+  app.setGlobalPrefix('api/v1');
+
+
   // Swagger Setup
   const config = new DocumentBuilder()
     .setTitle('Pockie Core API')
