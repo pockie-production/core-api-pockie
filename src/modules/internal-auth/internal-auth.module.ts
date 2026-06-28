@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { InternalAuthController } from './internal-auth.controller';
+import { InternalAuthController, InternalMeController } from './internal-auth.controller';
 import { InternalAuthService } from './internal-auth.service';
 
 @Module({
-  controllers: [InternalAuthController],
+  controllers: [InternalAuthController, InternalMeController],
   providers: [InternalAuthService],
 })
 export class InternalAuthModule {}
