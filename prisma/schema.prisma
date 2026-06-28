@@ -1,0 +1,376 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum RoleCode {
+  END_USER
+  SUPER_ADMIN
+  INTERNAL_ADMIN
+  CONTENT_ADMIN
+  BANK_ADMIN
+  BANK_ANALYST
+}
+
+enum OrganizationType {
+  INTERNAL
+  BANK
+  PARTNER
+}
+
+enum FilePurpose {
+  AVATAR
+  EKYC
+  OCR_UPLOAD
+  CHAT_ATTACHMENT
+  CAMPAIGN_ASSET
+  OTHER
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+enum ChatChannel {
+  MAIN_CHAT
+  PET_CHAT
+}
+
+enum TrendStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  DEPLOYED
+  ARCHIVED
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String?    @unique
+  phone        String?    @unique
+  passwordHash String
+  status       UserStatus @default(ACTIVE)
+  kycStatus    KycStatus  @default(NOT_STARTED)
+
+  profile      UserProfile?
+  roles        UserRole[]
+  refreshTokens RefreshToken[]
+
+  chatSessions ChatSession[]
+  files        File[]
+  ocrJobs      OcrJob[]
+  petProfile   PetProfile?
+  streak       UserStreak?
+
+  organizationMembers OrganizationMember[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model UserProfile {
+  id          String  @id @default(uuid())
+  userId      String  @unique
+  fullName    String?
+  displayName String?
+  avatarFileId String?
+
+  user        User    @relation(fields: [userId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  role      RoleCode
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, role])
+}
+
+model RefreshToken {
+  id           String   @id @default(uuid())
+  userId       String
+  tokenHash    String
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  user         User     @relation(fields: [userId], references: [id])
+
+  createdAt    DateTime @default(now())
+}
+
+model Organization {
+  id        String           @id @default(uuid())
+  name      String
+  type      OrganizationType
+  taxCode   String?
+  status    String           @default("ACTIVE")
+
+  members   OrganizationMember[]
+  campaigns Campaign[]
+  vouchers  Voucher[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrganizationMember {
+  id             String @id @default(uuid())
+  organizationId String
+  userId         String
+  title          String?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+
+  createdAt      DateTime @default(now())
+
+  @@unique([organizationId, userId])
+}
+
+model EkycVerification {
+  id             String    @id @default(uuid())
+  userId         String
+  provider       String    @default("VNPT")
+  providerRef    String?
+  status         KycStatus @default(PENDING)
+  resultJson     Json?
+  frontFileId    String?
+  backFileId     String?
+  selfieFileId   String?
+  verifiedAt     DateTime?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model File {
+  id          String      @id @default(uuid())
+  ownerId     String?
+  bucket      String
+  objectKey   String
+  originalName String?
+  mimeType    String?
+  sizeBytes   Int?
+  purpose     FilePurpose @default(OTHER)
+
+  owner       User?       @relation(fields: [ownerId], references: [id])
+
+  createdAt   DateTime    @default(now())
+}
+
+model OcrJob {
+  id          String   @id @default(uuid())
+  userId      String
+  fileId      String
+  provider    String   @default("VNPT")
+  status      String   @default("PENDING")
+  resultJson  Json?
+  errorMessage String?
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ChatSession {
+  id          String      @id @default(uuid())
+  userId      String
+  channel     ChatChannel @default(MAIN_CHAT)
+  title       String?
+  metadata    Json?
+
+  user        User        @relation(fields: [userId], references: [id])
+  messages    ChatMessage[]
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model ChatMessage {
+  id          String   @id @default(uuid())
+  sessionId   String
+  role        ChatRole
+  content     String
+  metadata    Json?
+
+  session     ChatSession @relation(fields: [sessionId], references: [id])
+
+  createdAt   DateTime @default(now())
+}
+
+model PetProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  name        String   @default("Pockie")
+  level       Int      @default(1)
+  mood        String   @default("NORMAL")
+  metadata    Json?
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PetInteraction {
+  id          String   @id @default(uuid())
+  userId      String
+  eventName   String
+  payload     Json?
+
+  createdAt   DateTime @default(now())
+}
+
+model UserStreak {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  currentDays Int      @default(0)
+  longestDays Int      @default(0)
+  lastActiveDate DateTime?
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  updatedAt   DateTime @updatedAt
+}
+
+model Voucher {
+  id             String   @id @default(uuid())
+  organizationId String?
+  title          String
+  description    String?
+  code           String?
+  totalQuantity  Int?
+  remainingQuantity Int?
+  startsAt       DateTime?
+  endsAt         DateTime?
+  metadata       Json?
+
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  claims         VoucherClaim[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model VoucherClaim {
+  id          String   @id @default(uuid())
+  voucherId   String
+  userId      String
+  status      String   @default("CLAIMED")
+  claimedAt   DateTime @default(now())
+  redeemedAt  DateTime?
+
+  voucher     Voucher  @relation(fields: [voucherId], references: [id])
+
+  @@unique([voucherId, userId])
+}
+
+model Trend {
+  id          String      @id @default(uuid())
+  source      String      @default("VNSOCIAL")
+  externalId  String?
+  title       String
+  summary     String?
+  category    String?
+  score       Float?
+  status      TrendStatus @default(PENDING_REVIEW)
+  rawJson     Json?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Campaign {
+  id             String         @id @default(uuid())
+  organizationId String
+  name           String
+  objective      String?
+  status         CampaignStatus @default(DRAFT)
+  configJson     Json?
+  startsAt       DateTime?
+  endsAt         DateTime?
+
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  reports        CampaignReport[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model CampaignReport {
+  id          String   @id @default(uuid())
+  campaignId  String
+  title       String
+  content     String
+  metricsJson Json?
+  aiSummary   String?
+
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+
+  createdAt   DateTime @default(now())
+}
+
+model AnalyticsEvent {
+  id          String   @id @default(uuid())
+  userId      String?
+  sessionId   String?
+  eventName   String
+  page        String?
+  feature     String?
+  payload     Json?
+
+  createdAt   DateTime @default(now())
+
+  @@index([eventName])
+  @@index([feature])
+  @@index([createdAt])
+}
+
+model AdminActionLog {
+  id          String   @id @default(uuid())
+  actorUserId String
+  action      String
+  targetType  String?
+  targetId    String?
+  payload     Json?
+
+  createdAt   DateTime @default(now())
+}
