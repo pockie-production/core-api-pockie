@@ -283,6 +283,89 @@ async function main() {
   await createMockSession('REJECTED', 'FAIL', 'HIGH', {}, {}, {}, { msg: 'NOMATCH' }, 'Rejection: Face mismatch');
   await createMockSession('REJECTED', 'FAIL', 'CRITICAL', {}, { fakeLiveness: true }, {}, {}, 'Rejection: Fake document liveness detected');
 
+  // 6. Seed Gamification Level Rules & Missions
+  console.log('Seeding Gamification Level Rules & Missions...');
+  await prisma.levelRule.upsert({ where: { level: 1 }, update: {}, create: { level: 1, requiredTotalXp: 0, title: 'Newbie' } });
+  await prisma.levelRule.upsert({ where: { level: 2 }, update: {}, create: { level: 2, requiredTotalXp: 100, title: 'Explorer' } });
+  await prisma.levelRule.upsert({ where: { level: 3 }, update: {}, create: { level: 3, requiredTotalXp: 300, title: 'Pro' } });
+
+  const missionDaily1 = await prisma.mission.upsert({
+    where: { code: 'mission_daily_1' },
+    update: {},
+    create: { code: 'mission_daily_1', title: 'Đăng nhập hôm nay', description: 'Đăng nhập vào ứng dụng', missionType: 'DAILY', xpReward: 10, targetValue: 1, metadata: { requiresConfirm: false } }
+  });
+  const missionDaily2 = await prisma.mission.upsert({
+    where: { code: 'mission_daily_2' },
+    update: {},
+    create: { code: 'mission_daily_2', title: 'Đọc 1 bài báo', description: 'Đọc kiến thức tài chính', missionType: 'DAILY', xpReward: 20, targetValue: 1, metadata: { requiresConfirm: true } }
+  });
+
+  // 7. Seed End-user Finance & Gamification Profiles
+  console.log('Seeding End-user Dashboard Data...');
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  
+  // Upsert profile for ekycUser
+  await prisma.userGamificationProfile.upsert({
+    where: { userId: ekycUser.id },
+    update: {},
+    create: { userId: ekycUser.id, totalXp: 150, currentXp: 150, level: 2, currentStreakDays: 3, longestStreakDays: 5 }
+  });
+
+  // Wallet does not have userId_currency unique constraint, so we might query first or use findFirst
+  let wallet = await prisma.wallet.findFirst({ where: { userId: ekycUser.id, currency: 'VND' } });
+  if (!wallet) {
+    wallet = await prisma.wallet.create({
+      data: { userId: ekycUser.id, balance: 5000000, currency: 'VND', name: 'Ví Tiền Mặt' }
+    });
+  }
+
+  const catFood = await prisma.financialCategory.upsert({
+    where: { code: 'cat_food' },
+    update: {},
+    create: { code: 'cat_food', name: 'Ăn uống', icon: '🍔', type: 'EXPENSE', isSystem: true }
+  });
+
+  const catTransport = await prisma.financialCategory.upsert({
+    where: { code: 'cat_transport' },
+    update: {},
+    create: { code: 'cat_transport', name: 'Đi lại', icon: '🚗', type: 'EXPENSE', isSystem: true }
+  });
+
+  await prisma.monthlyBudget.upsert({
+    where: { userId_month: { userId: ekycUser.id, month: currentMonth } },
+    update: {},
+    create: { userId: ekycUser.id, month: currentMonth, totalBudget: 10000000, currency: 'VND' }
+  });
+
+  // Check if transactions exist to avoid duplicates
+  const existingTxCount = await prisma.financialTransaction.count({ where: { userId: ekycUser.id } });
+  if (existingTxCount === 0) {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    await prisma.financialTransaction.createMany({
+      data: [
+        { userId: ekycUser.id, walletId: wallet.id, categoryId: catFood.id, amount: 50000, currency: 'VND', transactionType: 'EXPENSE', title: 'Ăn sáng', transactionDate: today },
+        { userId: ekycUser.id, walletId: wallet.id, categoryId: catFood.id, amount: 150000, currency: 'VND', transactionType: 'EXPENSE', title: 'Ăn trưa', transactionDate: yesterday },
+        { userId: ekycUser.id, walletId: wallet.id, categoryId: catTransport.id, amount: 500000, currency: 'VND', transactionType: 'EXPENSE', title: 'Đổ xăng', transactionDate: yesterday },
+      ]
+    });
+  }
+
+  // Seed notification
+  const notifCount = await prisma.notification.count({ where: { userId: ekycUser.id } });
+  if (notifCount === 0) {
+    await prisma.notification.create({
+      data: {
+        userId: ekycUser.id,
+        title: 'Chào mừng bạn đến với Pockie',
+        body: 'Khám phá các tính năng tài chính mới ngay hôm nay!',
+        type: 'SYSTEM',
+      }
+    });
+  }
+
   console.log('Seeding complete.');
 }
 

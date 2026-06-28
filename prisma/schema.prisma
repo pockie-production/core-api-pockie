@@ -102,6 +102,20 @@ model User {
   updatedAt        DateTime           @updatedAt
   EkycSession      EkycSession[]
   EkycInternalNote EkycInternalNote[]
+
+  // --- Task 3 Relations ---
+  authIdentities            AuthIdentity[]
+  gamificationProfile       UserGamificationProfile?
+  xpEvents                  XpEvent[]
+  userMissionLogs           UserMissionLog[]
+  userStreakDays            UserStreakDay[]
+  wallets                   Wallet[]
+  financialTransactions     FinancialTransaction[]
+  monthlyBudgets            MonthlyBudget[]
+  monthlyFinancialSummaries MonthlyFinancialSummary[]
+  notifications             Notification[]
+  financialInsights         FinancialInsight[]
+  aiInsightJobs             AiInsightJob[]
 }
 
 model UserProfile {
@@ -684,4 +698,260 @@ model EkycInternalNote {
   author  User        @relation(fields: [authorId], references: [id])
 
   createdAt DateTime @default(now())
+}
+
+// ==========================================
+// USER DASHBOARD / GAMIFICATION / FINANCE
+// ==========================================
+
+model AuthIdentity {
+  id             String  @id @default(uuid())
+  userId         String
+  provider       String
+  providerUserId String
+  email          String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerUserId])
+}
+
+model UserGamificationProfile {
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  level             Int       @default(1)
+  currentXp         Int       @default(0)
+  totalXp           Int       @default(0)
+  currentStreakDays Int       @default(0)
+  longestStreakDays Int       @default(0)
+  lastActiveDate    DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model XpEvent {
+  id         String  @id @default(uuid())
+  userId     String
+  sourceType String
+  sourceId   String?
+  xpAmount   Int
+  reason     String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model LevelRule {
+  id              String  @id @default(uuid())
+  level           Int     @unique
+  requiredTotalXp Int
+  title           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Mission {
+  id          String  @id @default(uuid())
+  code        String  @unique
+  title       String
+  description String?
+  missionType String
+  targetValue Int     @default(1)
+  xpReward    Int     @default(0)
+  status      String  @default("ACTIVE")
+  metadata    Json?
+
+  userMissionLogs UserMissionLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserMissionLog {
+  id          String    @id @default(uuid())
+  userId      String
+  missionId   String
+  date        DateTime  @db.Date
+  status      String    @default("PENDING")
+  progress    Int       @default(0)
+  completedAt DateTime?
+  xpAwarded   Int       @default(0)
+  metadata    Json?
+
+  user    User    @relation(fields: [userId], references: [id])
+  mission Mission @relation(fields: [missionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, missionId, date])
+}
+
+model UserStreakDay {
+  id                    String   @id @default(uuid())
+  userId                String
+  date                  DateTime @db.Date
+  isCompleted           Boolean  @default(false)
+  completedMissionCount Int      @default(0)
+  xpAwarded             Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+}
+
+model Wallet {
+  id         String  @id @default(uuid())
+  userId     String
+  name       String
+  walletType String  @default("CASH")
+  currency   String  @default("VND")
+  balance    Decimal @default(0) @db.Decimal(18, 2)
+  status     String  @default("ACTIVE")
+
+  user         User                   @relation(fields: [userId], references: [id])
+  transactions FinancialTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@map("wallets")
+}
+
+model FinancialCategory {
+  id       String  @id @default(uuid())
+  code     String? @unique
+  name     String
+  type     String
+  icon     String?
+  color    String?
+  parentId String?
+  isSystem Boolean @default(false)
+
+  transactions FinancialTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("financial_categories")
+}
+
+model FinancialTransaction {
+  id              String   @id @default(uuid())
+  userId          String
+  walletId        String
+  categoryId      String
+  amount          Decimal  @db.Decimal(18, 2)
+  currency        String   @default("VND")
+  transactionType String
+  title           String
+  merchantName    String?
+  description     String?
+  transactionDate DateTime
+  source          String   @default("MANUAL")
+  sourceRefId     String?
+
+  user     User              @relation(fields: [userId], references: [id])
+  wallet   Wallet            @relation(fields: [walletId], references: [id])
+  category FinancialCategory @relation(fields: [categoryId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("financial_transactions")
+}
+
+model MonthlyBudget {
+  id          String  @id @default(uuid())
+  userId      String
+  month       String // YYYY-MM
+  totalBudget Decimal @db.Decimal(18, 2)
+  currency    String  @default("VND")
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, month])
+  @@map("monthly_budgets")
+}
+
+model MonthlyFinancialSummary {
+  id              String  @id @default(uuid())
+  userId          String
+  month           String // YYYY-MM
+  totalIncome     Decimal @default(0) @db.Decimal(18, 2)
+  totalExpense    Decimal @default(0) @db.Decimal(18, 2)
+  totalBudget     Decimal @default(0) @db.Decimal(18, 2)
+  remainingAmount Decimal @default(0) @db.Decimal(18, 2)
+  topCategoryId   String?
+  summaryJson     Json?
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, month])
+  @@map("monthly_financial_summaries")
+}
+
+model Notification {
+  id       String    @id @default(uuid())
+  userId   String
+  type     String
+  title    String
+  body     String
+  dataJson Json?
+  readAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model FinancialInsight {
+  id            String @id @default(uuid())
+  userId        String
+  month         String // YYYY-MM
+  insightType   String
+  mood          String
+  title         String
+  content       String
+  severity      String @default("INFO")
+  sparklineJson Json?
+  metadata      Json?
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model AiInsightJob {
+  id           String  @id @default(uuid())
+  userId       String
+  month        String // YYYY-MM
+  status       String  @default("PENDING")
+  inputJson    Json?
+  outputJson   Json?
+  errorMessage String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
 }

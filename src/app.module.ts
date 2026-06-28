@@ -10,6 +10,12 @@ import { VnptEkycModule } from './integrations/vnpt-ekyc/vnpt-ekyc.module';
 import { MinioModule } from './integrations/minio/minio.module';
 import { InternalEkycModule } from './modules/internal-ekyc/internal-ekyc.module';
 import { EnduserEkycModule } from './modules/enduser-ekyc/enduser-ekyc.module';
+import { GamificationModule } from './modules/gamification/gamification.module';
+import { FinanceModule } from './modules/finance/finance.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { InsightsModule } from './modules/insights/insights.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -22,6 +28,12 @@ import { EnduserEkycModule } from './modules/enduser-ekyc/enduser-ekyc.module';
     MinioModule,
     InternalEkycModule,
     EnduserEkycModule,
+    GamificationModule,
+    FinanceModule,
+    NotificationsModule,
+    InsightsModule,
+    DashboardModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
