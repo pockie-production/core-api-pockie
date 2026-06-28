@@ -8,6 +8,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   LogoutDto,
+  ChangePasswordDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
@@ -74,6 +75,20 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Logout successful' })
   async logout(@Req() req, @Body() dto: LogoutDto) {
     return this.authService.logout(req.user.id, dto.refreshToken);
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change password for current end user' })
+  @ApiBody({ type: ChangePasswordDto })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  async changePassword(@Req() req, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(
+      req.user.id,
+      dto.currentPassword,
+      dto.newPassword,
+    );
   }
 
   @Get('me')

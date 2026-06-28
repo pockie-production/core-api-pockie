@@ -154,6 +154,24 @@ export class AuthService implements OnModuleInit {
         });
       }
 
+      await this.prisma.authIdentity.upsert({
+        where: {
+          provider_providerUserId: {
+            provider: 'FIREBASE',
+            providerUserId: decodedToken.uid,
+          },
+        },
+        create: {
+          userId: user.id,
+          provider: 'FIREBASE',
+          providerUserId: decodedToken.uid,
+          email,
+        },
+        update: {
+          email,
+        },
+      });
+
       return this.generateTokens(user.id, user.roles.map((r) => r.role));
     } catch (error) {
       throw new UnauthorizedException('Invalid Firebase ID token');
@@ -264,6 +282,50 @@ export class AuthService implements OnModuleInit {
     }
 
     return { success: true };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (!user.passwordHash) {
+      throw new BadRequestException('Tài khoản Google không hỗ trợ đổi mật khẩu tại đây');
+    }
+
+    const passwordMatches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!passwordMatches) {
+      throw new UnauthorizedException('Mật khẩu hiện tại không đúng');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: {
+          userId,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    return {
+      success: true,
+      message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.',
+    };
   }
 
   private async generateTokens(userId: string, roles: RoleCode[]) {
