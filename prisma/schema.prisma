@@ -374,3 +374,25 @@ model AdminActionLog {
 
   createdAt   DateTime @default(now())
 }
+
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  description String?
+
+  rolePermissions RolePermission[]
+
+  createdAt   DateTime @default(now())
+}
+
+model RolePermission {
+  id           String   @id @default(uuid())
+  role         RoleCode
+  permissionId String
+
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  createdAt    DateTime @default(now())
+
+  @@unique([role, permissionId])
+}
