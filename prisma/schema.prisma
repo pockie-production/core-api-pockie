@@ -89,6 +89,7 @@ model User {
   profile       UserProfile?
   roles         UserRole[]
   refreshTokens RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
 
   chatSessions ChatSession[]
   files        File[]
@@ -149,6 +150,18 @@ model RefreshToken {
   tokenHash String
   expiresAt DateTime
   revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
 
   user User @relation(fields: [userId], references: [id])
 

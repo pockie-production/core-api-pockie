@@ -1,6 +1,14 @@
 import { Controller, Post, Body, Get, UseGuards, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { SignupDto, LoginDto, RefreshTokenDto, FirebaseLoginDto } from './dto/auth.dto';
+import {
+  SignupDto,
+  LoginDto,
+  RefreshTokenDto,
+  FirebaseLoginDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  LogoutDto,
+} from './dto/auth.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 
@@ -40,6 +48,32 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Firebase login successful' })
   async firebaseLogin(@Body() dto: FirebaseLoginDto) {
     return this.authService.verifyFirebaseToken(dto.idToken);
+  }
+
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Request a password reset token (mock flow)' })
+  @ApiBody({ type: ForgotPasswordDto })
+  @ApiResponse({ status: 200, description: 'Password reset request accepted' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password using a mock reset token' })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiResponse({ status: 200, description: 'Password reset successful' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token, dto.newPassword);
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Logout current end user' })
+  @ApiBody({ type: LogoutDto })
+  @ApiResponse({ status: 200, description: 'Logout successful' })
+  async logout(@Req() req, @Body() dto: LogoutDto) {
+    return this.authService.logout(req.user.id, dto.refreshToken);
   }
 
   @Get('me')

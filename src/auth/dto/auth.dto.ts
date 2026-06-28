@@ -39,3 +39,30 @@ export class FirebaseLoginDto {
   @IsNotEmpty()
   idToken: string;
 }
+
+export class ForgotPasswordDto {
+  @ApiProperty({ example: 'user@example.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty({ example: 'mock_reset_token_123' })
+  @IsString()
+  @IsNotEmpty()
+  token: string;
+
+  @ApiProperty({ example: 'NewPassword123' })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  newPassword: string;
+}
+
+export class LogoutDto {
+  @ApiProperty({ example: 'eyJhbGciOiJIUzI1...' })
+  @IsString()
+  @IsNotEmpty()
+  refreshToken: string;
+}
