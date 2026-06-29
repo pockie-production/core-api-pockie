@@ -144,6 +144,11 @@ export class VnSocialService {
 
       this.logger.warn('Received 401 from VnSocial. Attempting token refresh...');
 
+      if (!this.username || !this.password) {
+        this.logger.error('Missing VNSOCIAL_USERNAME or VNSOCIAL_PASSWORD, cannot auto-refresh VnSocial token.');
+        throw error;
+      }
+
       if (!this.refreshTokenPromise) {
         this.refreshTokenPromise = this.refreshAccessToken().finally(() => {
           this.refreshTokenPromise = null;
@@ -158,11 +163,26 @@ export class VnSocialService {
 
   private async executeHttpRequest(options: VnSocialApiRequestOptions, url: string) {
     const headers = await this.buildHeaders();
-    return lastValueFrom(
+    const response = await lastValueFrom(
       options.method === 'GET'
         ? this.httpService.get(url, { headers, params: options.params })
         : this.httpService.post(url, options.payload || {}, { headers, params: options.params }),
     );
+    if (this.isAuthFailurePayload(response.data)) {
+      const error = new Error(response.data?.message || 'VnSocial authentication failed') as any;
+      error.response = {
+        status: 401,
+        data: response.data,
+      };
+      throw error;
+    }
+    return response;
+  }
+
+  private isAuthFailurePayload(payload: any) {
+    if (!payload || typeof payload !== 'object') return false;
+    const message = String(payload.message || '').toLowerCase();
+    return payload.expireToken === true || message.includes('no token') || message.includes('authenticate token');
   }
 
   private async refreshAccessToken(): Promise<void> {
