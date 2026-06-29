@@ -247,10 +247,27 @@ export class VnSocialService {
       externalSourceId: raw.source_id || raw.sourceId || null,
       name: raw.name || raw.title || 'Unnamed VnSocial project',
       type,
-      status: raw.status || 'ACTIVE',
+      status: this.normalizeProjectStatus(raw.status),
       sourceName: raw.sourceName || raw.source_name || null,
       rawJson: raw,
     };
+  }
+
+  private normalizeProjectStatus(value: unknown) {
+    if (typeof value === 'boolean') {
+      return value ? 'ACTIVE' : 'INACTIVE';
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.trim().toUpperCase();
+      return normalized || 'ACTIVE';
+    }
+
+    if (typeof value === 'number') {
+      return value > 0 ? 'ACTIVE' : 'INACTIVE';
+    }
+
+    return 'ACTIVE';
   }
 
   private mapPost(raw: any): VnSocialPostDto {
