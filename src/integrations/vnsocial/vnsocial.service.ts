@@ -11,6 +11,7 @@ export class VnSocialService {
   private readonly logger = new Logger(VnSocialService.name);
   private readonly mode = process.env.VNSOCIAL_MODE || 'mock';
   private readonly baseUrl = process.env.VNSOCIAL_BASE_URL || 'https://api-vnsocialplus.vnpt.vn/social-api/v1';
+  private accessToken = this.normalizeBearerToken(process.env.VNSOCIAL_ACCESS_TOKEN || process.env.VNSOCIAL_API_KEY || '');
   private readonly username = process.env.VNSOCIAL_USERNAME || '';
   private readonly password = process.env.VNSOCIAL_PASSWORD || '';
   private readonly loginEndpoint = process.env.VNSOCIAL_LOGIN_ENDPOINT || '/login';
@@ -19,7 +20,8 @@ export class VnSocialService {
   private readonly sourcePostsEndpoint = process.env.VNSOCIAL_SOURCE_POSTS_ENDPOINT || '/source-follow/posts';
   private readonly hotKeywordsEndpoint = process.env.VNSOCIAL_HOT_KEYWORDS_ENDPOINT || '/projects/hot-keywords';
   private readonly hotPostsEndpoint = process.env.VNSOCIAL_HOT_POSTS_ENDPOINT || '/projects/hot-posts';
-  private accessToken: string | null = null;
+  private readonly authHeaderName = process.env.VNSOCIAL_AUTH_HEADER || 'Authorization';
+  private refreshTokenPromise: Promise<void> | null = null;
 
   constructor(
     private readonly httpService: HttpService,
@@ -77,14 +79,9 @@ export class VnSocialService {
   private async request(options: VnSocialApiRequestOptions) {
     const startedAt = Date.now();
     const url = `${this.baseUrl}${options.endpoint}`;
-    const headers = await this.buildHeaders();
 
     try {
-      const response = await lastValueFrom(
-        options.method === 'GET'
-          ? this.httpService.get(url, { headers, params: options.params })
-          : this.httpService.post(url, options.payload || {}, { headers, params: options.params }),
-      );
+      const response = await this.requestWithRetry(options, url);
 
       await this.prisma.vnSocialApiLog.create({
         data: {
@@ -122,16 +119,55 @@ export class VnSocialService {
   private async buildHeaders() {
     if (this.isMock) return {};
     const token = await this.getAccessToken();
+    const authValue = this.authHeaderName.toLowerCase() === 'authorization' ? `Bearer ${token}` : token;
     return {
-      'x-access-token': token,
+      [this.authHeaderName]: authValue,
       'Content-Type': 'application/json',
     };
   }
 
   private async getAccessToken() {
     if (this.accessToken) return this.accessToken;
+    await this.refreshAccessToken();
+    if (this.accessToken) return this.accessToken;
+
+    throw new Error('Missing VNSOCIAL_ACCESS_TOKEN');
+  }
+
+  private async requestWithRetry(options: VnSocialApiRequestOptions, url: string) {
+    try {
+      return await this.executeHttpRequest(options, url);
+    } catch (error: any) {
+      if (error.response?.status !== 401) {
+        throw error;
+      }
+
+      this.logger.warn('Received 401 from VnSocial. Attempting token refresh...');
+
+      if (!this.refreshTokenPromise) {
+        this.refreshTokenPromise = this.refreshAccessToken().finally(() => {
+          this.refreshTokenPromise = null;
+        });
+      }
+
+      await this.refreshTokenPromise;
+      this.logger.log('Retrying VnSocial request after token refresh...');
+      return this.executeHttpRequest(options, url);
+    }
+  }
+
+  private async executeHttpRequest(options: VnSocialApiRequestOptions, url: string) {
+    const headers = await this.buildHeaders();
+    return lastValueFrom(
+      options.method === 'GET'
+        ? this.httpService.get(url, { headers, params: options.params })
+        : this.httpService.post(url, options.payload || {}, { headers, params: options.params }),
+    );
+  }
+
+  private async refreshAccessToken(): Promise<void> {
     if (!this.username || !this.password) {
-      throw new Error('Missing VNSOCIAL_USERNAME or VNSOCIAL_PASSWORD');
+      throw new Error('Cannot refresh VnSocial access token: missing VNSOCIAL_USERNAME or VNSOCIAL_PASSWORD');
     }
 
     const response = await lastValueFrom(
@@ -141,18 +177,29 @@ export class VnSocialService {
       }),
     );
 
-    const token =
-      response.data?.object?.access_token ||
-      response.data?.object?.token ||
-      response.data?.object ||
-      response.data?.token;
+    const token = this.extractAccessToken(response.data);
 
     if (!token || typeof token !== 'string') {
       throw new Error('Unable to extract VnSocial access token from login response');
     }
 
-    this.accessToken = token;
-    return token;
+    this.accessToken = this.normalizeBearerToken(token);
+    this.logger.log('Successfully refreshed VnSocial access token');
+  }
+
+  private extractAccessToken(payload: any): string | null {
+    const token =
+      payload?.object?.access_token ||
+      payload?.object?.token ||
+      payload?.object ||
+      payload?.access_token ||
+      payload?.token;
+
+    return typeof token === 'string' ? token : null;
+  }
+
+  private normalizeBearerToken(token: string) {
+    return token.replace(/^Bearer\s+/i, '').trim();
   }
 
   private extractArray(payload: any): any[] {
