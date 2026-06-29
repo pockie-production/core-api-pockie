@@ -17,6 +17,7 @@ import { InsightsModule } from './modules/insights/insights.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { UsersModule } from './modules/users/users.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { InternalUsersModule } from './modules/internal-users/internal-users.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     DashboardModule,
     UsersModule,
     AnalyticsModule,
+    InternalUsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
