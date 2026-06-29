@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../../prisma/prisma.service';
 import { lastValueFrom } from 'rxjs';
@@ -112,6 +112,9 @@ export class VnSocialService {
         },
       });
       this.logger.error(`VnSocial request failed at ${options.endpoint}: ${error.message}`);
+      if (this.isAuthFailurePayload(error.response?.data)) {
+        throw new BadGatewayException('VnSocial access token is invalid or expired');
+      }
       throw error;
     }
   }
