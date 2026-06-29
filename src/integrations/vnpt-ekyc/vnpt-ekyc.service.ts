@@ -152,7 +152,7 @@ export class VnptEkycService {
     sessionId: string,
   ): Promise<VnptOcrResponse> {
     const startTime = Date.now();
-    const endpoint = VNPT_EKYC_ENDPOINTS.ocr.web;
+    const endpoint = VNPT_EKYC_ENDPOINTS.ocr.app;
     const url = `${this.baseUrl}${endpoint}`;
 
     const payload = {
@@ -161,7 +161,7 @@ export class VnptEkycService {
       client_session: this.buildClientSession(sessionId),
       type: -1,
       validate_postcode: true,
-      crop_param: false,
+      crop_param: '0,0',
       token: this.macAddress,
     };
 
@@ -201,14 +201,12 @@ export class VnptEkycService {
     sessionId: string,
   ): Promise<VnptCardLivenessResponse> {
     const startTime = Date.now();
-    const endpoint = VNPT_EKYC_ENDPOINTS.cardLiveness.web;
+    const endpoint = VNPT_EKYC_ENDPOINTS.cardLiveness.app;
     const url = `${this.baseUrl}${endpoint}`;
 
     const payload = {
       img: frontHash,
       client_session: this.buildClientSession(sessionId),
-      crop_param: false,
-      token: this.macAddress,
     };
 
     const safePayload = { ...payload, img: '[HASH]' };
@@ -293,7 +291,7 @@ export class VnptEkycService {
     sessionId: string,
   ): Promise<VnptFaceCompareResponse> {
     const startTime = Date.now();
-    const endpoint = VNPT_EKYC_ENDPOINTS.faceCompare.web;
+    const endpoint = VNPT_EKYC_ENDPOINTS.faceCompare.app;
     const url = `${this.baseUrl}${endpoint}`;
 
     const payload = {
@@ -339,13 +337,12 @@ export class VnptEkycService {
     sessionId: string,
   ): Promise<VnptMaskFaceResponse> {
     const startTime = Date.now();
-    const endpoint = VNPT_EKYC_ENDPOINTS.maskFace.web;
+    const endpoint = VNPT_EKYC_ENDPOINTS.maskFace.app;
     const url = `${this.baseUrl}${endpoint}`;
 
     const payload = {
       img: selfieHash,
       client_session: this.buildClientSession(sessionId),
-      token: this.macAddress,
     };
 
     const safePayload = { ...payload, img: '[HASH]' };
