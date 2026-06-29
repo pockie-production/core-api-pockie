@@ -29,7 +29,10 @@ export class VnptEkycService {
   private readonly logger = new Logger(VnptEkycService.name);
   
   private readonly baseUrl = process.env.VNPT_EKYC_BASE_URL || 'https://api.idg.vnpt.vn';
-  private readonly accessToken = process.env.VNPT_EKYC_ACCESS_TOKEN || '';
+  private accessToken = process.env.VNPT_EKYC_ACCESS_TOKEN || '';
+  private readonly vnptUsername = process.env.VNPT_EKYC_USERNAME || '';
+  private readonly vnptPassword = process.env.VNPT_EKYC_PASSWORD || '';
+  private refreshTokenPromise: Promise<void> | null = null;
   private readonly tokenId = process.env.VNPT_EKYC_TOKEN_ID || '';
   private readonly tokenKey = process.env.VNPT_EKYC_TOKEN_KEY || '';
   private readonly macAddress = process.env.VNPT_EKYC_MAC_ADDRESS_OR_TOKEN || 'TEST1';
@@ -66,6 +69,65 @@ export class VnptEkycService {
   private buildClientSession(sessionId: string) {
     const timestamp = Math.floor(Date.now() / 1000);
     return `WEB_pockie_browser_Device_1.0_${sessionId}_${timestamp}`;
+  }
+
+  private async refreshAccessToken(): Promise<void> {
+    if (!this.vnptUsername || !this.vnptPassword) {
+      throw new Error('Cannot refresh token: missing VNPT_EKYC_USERNAME or VNPT_EKYC_PASSWORD');
+    }
+
+    const url = `${this.baseUrl}/auth/oauth/token`;
+    const payload = {
+      username: this.vnptUsername,
+      password: this.vnptPassword,
+      client_id: 'clientapp',
+      grant_type: 'password',
+      client_secret: 'password',
+    };
+
+    try {
+      const response = await lastValueFrom(
+        this.httpService.post(url, payload, {
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+      
+      if (response.data && response.data.access_token) {
+        this.accessToken = response.data.access_token;
+        this.logger.log('Successfully refreshed VNPT Access Token');
+      } else {
+        throw new Error('No access_token in response');
+      }
+    } catch (error) {
+      this.logger.error(`Failed to refresh VNPT Access Token: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  private async requestWithRetry<T>(requestFn: () => Promise<T>): Promise<T> {
+    try {
+      return await requestFn();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        this.logger.warn('Received 401 from VNPT. Attempting token refresh...');
+        
+        if (!this.vnptUsername || !this.vnptPassword) {
+          this.logger.error('Missing VNPT_EKYC_USERNAME or PASSWORD, cannot auto-refresh token.');
+          throw error;
+        }
+
+        if (!this.refreshTokenPromise) {
+          this.refreshTokenPromise = this.refreshAccessToken().finally(() => {
+            this.refreshTokenPromise = null;
+          });
+        }
+        
+        await this.refreshTokenPromise;
+        this.logger.log('Retrying request after token refresh...');
+        return await requestFn();
+      }
+      throw error;
+    }
   }
 
   private async logRequest(
@@ -124,9 +186,9 @@ export class VnptEkycService {
     form.append('description', description);
 
     try {
-      const response = await lastValueFrom(
+      const response = await this.requestWithRetry(() => lastValueFrom(
         this.httpService.post(url, form, { headers: this.buildUploadHeaders(form.getHeaders()) })
-      );
+      ));
       
       const responseData = response.data;
       const result: VnptUploadFileResponse = {
@@ -174,9 +236,9 @@ export class VnptEkycService {
     }
 
     try {
-      const response = await lastValueFrom(
+      const response = await this.requestWithRetry(() => lastValueFrom(
         this.httpService.post(url, payload, { headers: this.buildJsonHeaders() })
-      );
+      ));
       
       const responseData = response.data;
       const result: VnptOcrResponse = {
@@ -218,9 +280,9 @@ export class VnptEkycService {
     }
 
     try {
-      const response = await lastValueFrom(
+      const response = await this.requestWithRetry(() => lastValueFrom(
         this.httpService.post(url, payload, { headers: this.buildJsonHeaders() })
-      );
+      ));
       
       const responseData = response.data;
       const result: VnptCardLivenessResponse = {
@@ -263,9 +325,9 @@ export class VnptEkycService {
     }
 
     try {
-      const response = await lastValueFrom(
+      const response = await this.requestWithRetry(() => lastValueFrom(
         this.httpService.post(url, payload, { headers: this.buildJsonHeaders() })
-      );
+      ));
       
       const responseData = response.data;
       const result: VnptFaceLivenessResponse = {
@@ -310,9 +372,9 @@ export class VnptEkycService {
     }
 
     try {
-      const response = await lastValueFrom(
+      const response = await this.requestWithRetry(() => lastValueFrom(
         this.httpService.post(url, payload, { headers: this.buildJsonHeaders() })
-      );
+      ));
       
       const responseData = response.data;
       const result: VnptFaceCompareResponse = {
@@ -354,9 +416,9 @@ export class VnptEkycService {
     }
 
     try {
-      const response = await lastValueFrom(
+      const response = await this.requestWithRetry(() => lastValueFrom(
         this.httpService.post(url, payload, { headers: this.buildJsonHeaders() })
-      );
+      ));
       
       const responseData = response.data;
       const result: VnptMaskFaceResponse = {
