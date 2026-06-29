@@ -39,41 +39,93 @@ export class VnSocialService {
     return this.extractArray(response).map((item) => this.mapProject(item));
   }
 
-  async getProjectPosts(project: { id: string; externalProjectId: string | null; externalSourceId: string | null; type: VnSocialProjectType }) {
+  async getProjectPosts(project: { id: string; externalProjectId: string | null; externalSourceId: string | null; type: VnSocialProjectType; sourceName?: string | null }) {
     if (this.isMock) return mockPostsByProject[project.externalProjectId || ''] || [];
 
     const isSourceProject = project.type === VnSocialProjectType.PERSONAL_POST;
-    const endpoint = isSourceProject ? this.sourcePostsEndpoint : this.topicPostsEndpoint;
-    const payload = isSourceProject
-      ? { source_id: project.externalSourceId || project.externalProjectId }
-      : { project_id: project.externalProjectId };
+    if (isSourceProject) {
+      const response = await this.request({
+        method: 'POST',
+        endpoint: this.sourcePostsEndpoint,
+        payload: { source_id: project.externalSourceId || project.externalProjectId },
+        projectId: project.id,
+      });
+      return this.extractArray(response).map((item) => this.mapPost(item));
+    }
 
-    const response = await this.request({ method: 'POST', endpoint, payload, projectId: project.id });
-    return this.extractArray(response).map((item) => this.mapPost(item));
+    const topicWindow = this.getTopicSyncWindow();
+    const postsByDocId = new Map<string, VnSocialPostDto>();
+
+    for (const source of this.getTopicSources(project)) {
+      const response = await this.request({
+        method: 'POST',
+        endpoint: this.topicPostsEndpoint,
+        payload: {
+          project_id: project.externalProjectId,
+          source,
+          start_time: topicWindow.startTime,
+          end_time: topicWindow.endTime,
+          from: 0,
+          size: 50,
+          reactionary: false,
+          province: this.getDefaultProvince(),
+        },
+        projectId: project.id,
+      });
+
+      for (const item of this.extractArray(response).map((raw) => this.mapPost(raw))) {
+        postsByDocId.set(item.externalDocId, item);
+      }
+    }
+
+    return Array.from(postsByDocId.values());
   }
 
-  async getHotKeywords(project: { id: string; externalProjectId: string | null }) {
+  async getHotKeywords(project: { id: string; externalProjectId: string | null; sourceName?: string | null }) {
     if (this.isMock) return mockHotKeywordsByProject[project.externalProjectId || ''] || [];
 
+    const topicWindow = this.getTopicSyncWindow();
     const response = await this.request({
       method: 'POST',
       endpoint: this.hotKeywordsEndpoint,
-      payload: { project_id: project.externalProjectId },
+      payload: {
+        project_id: project.externalProjectId,
+        start_time: topicWindow.startTime,
+        end_time: topicWindow.endTime,
+        sources: this.getTopicSources(project),
+      },
       projectId: project.id,
     });
-    return this.extractArray(response).map((item) => this.mapHotKeyword(item));
+
+    const payload = response?.object?.keyword || response?.keyword || response?.object?.data || response?.data || [];
+    return this.extractArray(payload).map((item) => this.mapHotKeyword(item));
   }
 
-  async getHotPosts(project: { id: string; externalProjectId: string | null }) {
+  async getHotPosts(project: { id: string; externalProjectId: string | null; sourceName?: string | null }) {
     if (this.isMock) return mockHotPostsByProject[project.externalProjectId || ''] || [];
 
-    const response = await this.request({
-      method: 'POST',
-      endpoint: this.hotPostsEndpoint,
-      payload: { project_id: project.externalProjectId },
-      projectId: project.id,
-    });
-    return this.extractArray(response).map((item) => this.mapPost(item));
+    const topicWindow = this.getTopicSyncWindow();
+    const postsByDocId = new Map<string, VnSocialPostDto>();
+
+    for (const source of this.getTopicSources(project)) {
+      const response = await this.request({
+        method: 'POST',
+        endpoint: this.hotPostsEndpoint,
+        payload: {
+          project_id: project.externalProjectId,
+          source,
+          start_time: topicWindow.startTime,
+          end_time: topicWindow.endTime,
+        },
+        projectId: project.id,
+      });
+
+      for (const item of this.extractArray(response).map((raw) => this.mapPost(raw))) {
+        postsByDocId.set(item.externalDocId, item);
+      }
+    }
+
+    return Array.from(postsByDocId.values());
   }
 
   private async request(options: VnSocialApiRequestOptions) {
@@ -268,6 +320,31 @@ export class VnSocialService {
     }
 
     return 'ACTIVE';
+  }
+
+  private getTopicSyncWindow() {
+    const now = Date.now();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    return {
+      startTime: this.toNumber(process.env.VNSOCIAL_TOPIC_SYNC_START_TIME) ?? sixMonthsAgo.getTime(),
+      endTime: this.toNumber(process.env.VNSOCIAL_TOPIC_SYNC_END_TIME) ?? now,
+    };
+  }
+
+  private getDefaultProvince() {
+    return process.env.VNSOCIAL_DEFAULT_PROVINCE || 'Hà Nội';
+  }
+
+  private getTopicSources(project: { sourceName?: string | null }) {
+    const allowedSources = new Set(['baochi', 'facebook']);
+    const configuredSources = (project.sourceName || '')
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter((item) => allowedSources.has(item));
+
+    return configuredSources.length ? Array.from(new Set(configuredSources)) : ['facebook', 'baochi'];
   }
 
   private mapPost(raw: any): VnSocialPostDto {
