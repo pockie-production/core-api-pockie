@@ -32,7 +32,19 @@ export class EnduserEkycService {
     if (session.status !== EkycSessionStatus.DRAFT) throw new BadRequestException('Session is not in DRAFT status');
 
     // Upload to MinIO
-    const fileId = await this.minioService.uploadFile(file, `ekyc/${userId}/${sessionId}`);
+    const objectKey = await this.minioService.uploadFile(file, `ekyc/${userId}/${sessionId}`);
+
+    const fileRecord = await this.prisma.file.create({
+      data: {
+        ownerId: userId,
+        bucket: 'ekyc-documents',
+        objectKey: objectKey,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        sizeBytes: file.size,
+        purpose: 'EKYC'
+      }
+    });
 
     // Check if side already exists, if so update it, else create
     let doc = await this.prisma.ekycDocument.findFirst({
@@ -42,7 +54,7 @@ export class EnduserEkycService {
     if (doc) {
       doc = await this.prisma.ekycDocument.update({
         where: { id: doc.id },
-        data: { fileId, documentType: data.documentType as EkycDocumentType }
+        data: { fileId: fileRecord.id, documentType: data.documentType as EkycDocumentType }
       });
     } else {
       doc = await this.prisma.ekycDocument.create({
@@ -50,7 +62,7 @@ export class EnduserEkycService {
           sessionId,
           side: data.side as EkycDocumentSide,
           documentType: data.documentType as EkycDocumentType,
-          fileId,
+          fileId: fileRecord.id,
         }
       });
     }
