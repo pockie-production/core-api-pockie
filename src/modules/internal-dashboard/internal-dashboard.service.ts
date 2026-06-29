@@ -43,11 +43,19 @@ export class InternalDashboardService {
       pendingTrendsYesterday,
       activeVouchers,
       activeVouchersYesterday,
+      vnSocialProjectsTotal,
+      vnSocialProjectsWithData,
+      vnSocialPostsTotal,
+      vnSocialKeywordsTotal,
+      vnSocialHotPostsTotal,
+      vnSocialSyncSuccessToday,
+      vnSocialSyncSuccessYesterday,
       userGrowth,
       ekycReviewQueue,
       trendQueue,
       expiringVoucherQueue,
       systemIssueQueue,
+      vnSocialProjectQueue,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { createdAt: { gte: startToday, lt: startTomorrow } } }),
@@ -81,6 +89,32 @@ export class InternalDashboardService {
       }),
       this.countActiveVouchers(now),
       this.countActiveVouchers(startYesterday),
+      this.prisma.vnSocialProject.count(),
+      this.prisma.vnSocialProject.count({
+        where: {
+          OR: [
+            { posts: { some: {} } },
+            { hotKeywords: { some: {} } },
+            { hotPosts: { some: {} } },
+            { trends: { some: {} } },
+          ],
+        },
+      }),
+      this.prisma.vnSocialPost.count(),
+      this.prisma.vnSocialHotKeyword.count(),
+      this.prisma.vnSocialHotPost.count(),
+      this.prisma.vnSocialSyncJob.count({
+        where: {
+          status: 'SUCCESS',
+          createdAt: { gte: startToday, lt: startTomorrow },
+        },
+      }),
+      this.prisma.vnSocialSyncJob.count({
+        where: {
+          status: 'SUCCESS',
+          createdAt: { gte: startYesterday, lt: startToday },
+        },
+      }),
       this.getUserGrowthSeries(startLast7Days, startTomorrow),
       this.prisma.ekycSession.findMany({
         where: { status: 'REVIEW_REQUIRED' },
@@ -114,6 +148,19 @@ export class InternalDashboardService {
           ],
         },
         orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+      this.prisma.vnSocialProject.findMany({
+        include: {
+          _count: {
+            select: { posts: true, hotKeywords: true, hotPosts: true, trends: true },
+          },
+          syncJobs: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
         take: 5,
       }),
     ]);
@@ -161,6 +208,23 @@ export class InternalDashboardService {
           deltaPercent: this.percentChange(activeVouchers, activeVouchersYesterday),
           deltaLabel: 'active now vs yesterday',
         },
+        vnSocialProjectsCached: {
+          value: vnSocialProjectsTotal,
+          deltaPercent: this.percentChange(vnSocialSyncSuccessToday, vnSocialSyncSuccessYesterday),
+          deltaLabel: 'successful VnSocial sync jobs vs yesterday',
+        },
+        vnSocialProjectsWithData: {
+          value: vnSocialProjectsWithData,
+          deltaLabel: 'projects with synced posts, keywords, hot posts or trends',
+        },
+        vnSocialPostsSynced: {
+          value: vnSocialPostsTotal,
+          deltaLabel: 'cached VnSocial posts',
+        },
+        vnSocialSignals: {
+          value: vnSocialKeywordsTotal + vnSocialHotPostsTotal,
+          deltaLabel: `${vnSocialKeywordsTotal} hot keywords + ${vnSocialHotPostsTotal} hot posts`,
+        },
       },
       userGrowth,
       queues: {
@@ -204,6 +268,22 @@ export class InternalDashboardService {
           actionLabel: 'Inspect',
           actionHref: '/analytics',
         })),
+        vnSocialProjects: vnSocialProjectQueue.map((project) => {
+          const latestJob = project.syncJobs[0] || null;
+          const totalSignals = project._count.hotKeywords + project._count.hotPosts + project._count.trends;
+          const hasData = project._count.posts > 0 || totalSignals > 0;
+
+          return {
+            id: project.id,
+            title: project.name,
+            subtitle: `${project.type} • ${project._count.posts} posts • ${totalSignals} signals`,
+            status: latestJob?.status || (hasData ? 'HAS_DATA' : 'READY'),
+            severity: latestJob?.status === 'FAILED' ? ('danger' as QueueSeverity) : hasData ? ('success' as QueueSeverity) : ('warning' as QueueSeverity),
+            createdAt: project.updatedAt.toISOString(),
+            actionLabel: 'Open',
+            actionHref: '/trends',
+          };
+        }),
       },
     };
   }
