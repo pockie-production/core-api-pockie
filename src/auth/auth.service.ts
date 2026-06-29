@@ -8,7 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { SignupDto, LoginDto } from './dto/auth.dto';
+import { SignupDto, LoginDto, FirebaseLoginDto } from './dto/auth.dto';
 import { RoleCode, KycStatus } from '@prisma/client';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -121,9 +121,9 @@ export class AuthService implements OnModuleInit {
     }
   }
 
-  async verifyFirebaseToken(idToken: string) {
+  async verifyFirebaseToken(dto: FirebaseLoginDto) {
     try {
-      const decodedToken = await getAuth().verifyIdToken(idToken);
+      const decodedToken = await getAuth().verifyIdToken(dto.idToken);
       const email = decodedToken.email;
 
       if (!email) {
@@ -154,6 +154,40 @@ export class AuthService implements OnModuleInit {
         });
       }
 
+      const googleDisplayName = this.normalizeOptional(
+        dto.displayName ?? decodedToken.name,
+      );
+      const googleAvatarUrl = this.normalizeOptional(
+        dto.avatarUrl ?? decodedToken.picture,
+      );
+
+      if (googleDisplayName || googleAvatarUrl) {
+        const currentProfile = await this.prisma.userProfile.findUnique({
+          where: { userId: user.id },
+        });
+
+        await this.prisma.userProfile.upsert({
+          where: { userId: user.id },
+          create: {
+            userId: user.id,
+            displayName: googleDisplayName,
+            fullName: googleDisplayName,
+            avatarFileId: googleAvatarUrl,
+          },
+          update: {
+            ...(!currentProfile?.displayName && googleDisplayName
+              ? { displayName: googleDisplayName }
+              : {}),
+            ...(!currentProfile?.fullName && googleDisplayName
+              ? { fullName: googleDisplayName }
+              : {}),
+            ...(!currentProfile?.avatarFileId && googleAvatarUrl
+              ? { avatarFileId: googleAvatarUrl }
+              : {}),
+          },
+        });
+      }
+
       await this.prisma.authIdentity.upsert({
         where: {
           provider_providerUserId: {
@@ -176,6 +210,15 @@ export class AuthService implements OnModuleInit {
     } catch (error) {
       throw new UnauthorizedException('Invalid Firebase ID token');
     }
+  }
+
+  private normalizeOptional(value?: string | null) {
+    if (value == null) {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
   }
 
   async forgotPassword(email: string) {

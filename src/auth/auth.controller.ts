@@ -48,7 +48,7 @@ export class AuthController {
   @ApiBody({ type: FirebaseLoginDto })
   @ApiResponse({ status: 200, description: 'Firebase login successful' })
   async firebaseLogin(@Body() dto: FirebaseLoginDto) {
-    return this.authService.verifyFirebaseToken(dto.idToken);
+    return this.authService.verifyFirebaseToken(dto);
   }
 
   @Post('forgot-password')

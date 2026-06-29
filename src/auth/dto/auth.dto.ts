@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUrl, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SignupDto {
@@ -38,6 +38,16 @@ export class FirebaseLoginDto {
   @IsString()
   @IsNotEmpty()
   idToken: string;
+
+  @ApiProperty({ example: 'Nguyen Van A', required: false })
+  @IsString()
+  @IsOptional()
+  displayName?: string;
+
+  @ApiProperty({ example: 'https://lh3.googleusercontent.com/a/example', required: false })
+  @IsUrl()
+  @IsOptional()
+  avatarUrl?: string;
 }
 
 export class ForgotPasswordDto {
