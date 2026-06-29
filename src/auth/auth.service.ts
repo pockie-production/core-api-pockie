@@ -9,7 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { SignupDto, LoginDto, FirebaseLoginDto } from './dto/auth.dto';
-import { RoleCode, KycStatus } from '@prisma/client';
+import { RoleCode, KycStatus, UserStatus } from '@prisma/client';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import * as path from 'path';
@@ -70,6 +70,10 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Tài khoản của bạn đã bị khoá hoặc bị xoá.');
+    }
+
     const passwordMatches = await bcrypt.compare(
       dto.password,
       user.passwordHash,
@@ -108,6 +112,10 @@ export class AuthService implements OnModuleInit {
 
       if (!user) {
         throw new UnauthorizedException('User not found');
+      }
+
+      if (user.status !== UserStatus.ACTIVE) {
+        throw new UnauthorizedException('Tài khoản của bạn đã bị khoá hoặc bị xoá.');
       }
 
       await this.prisma.refreshToken.update({
@@ -152,6 +160,10 @@ export class AuthService implements OnModuleInit {
             roles: true,
           },
         });
+      }
+
+      if (user.status !== UserStatus.ACTIVE) {
+        throw new UnauthorizedException('Tài khoản của bạn đã bị khoá hoặc bị xoá.');
       }
 
       const googleDisplayName = this.normalizeOptional(

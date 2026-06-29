@@ -78,6 +78,31 @@ enum CampaignStatus {
   ARCHIVED
 }
 
+enum VoucherClaimScope {
+  PER_ACCOUNT
+  PER_VERIFIED_IDENTITY
+  PER_CAMPAIGN_IDENTITY
+}
+
+enum VerifiedIdentityStatus {
+  VERIFIED
+  REVIEW_REQUIRED
+  REJECTED
+  DISABLED
+}
+
+enum VoucherClaimAttemptResult {
+  SUCCESS
+  REJECTED_NOT_VERIFIED
+  REJECTED_NO_VERIFIED_IDENTITY
+  REJECTED_DUPLICATE_ACCOUNT
+  REJECTED_DUPLICATE_IDENTITY
+  REJECTED_DUPLICATE_CAMPAIGN
+  REJECTED_OUT_OF_STOCK
+  REJECTED_INACTIVE
+  REJECTED_RULES
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String?    @unique
@@ -85,6 +110,7 @@ model User {
   passwordHash String
   status       UserStatus @default(ACTIVE)
   kycStatus    KycStatus  @default(NOT_STARTED)
+  verifiedIdentityId String?
 
   profile       UserProfile?
   roles         UserRole[]
@@ -117,6 +143,10 @@ model User {
   notifications             Notification[]
   financialInsights         FinancialInsight[]
   aiInsightJobs             AiInsightJob[]
+  verifiedIdentity          VerifiedIdentity? @relation(fields: [verifiedIdentityId], references: [id])
+  voucherClaims             VoucherClaim[]
+  voucherClaimAttempts      VoucherClaimAttempt[]
+  voucherCampaignLocks      VoucherCampaignIdentityLock[]
 }
 
 model UserProfile {
@@ -316,9 +346,14 @@ model Voucher {
   startsAt          DateTime?
   endsAt            DateTime?
   metadata          Json?
+  requiresKyc       Boolean   @default(true)
+  claimScope        VoucherClaimScope @default(PER_VERIFIED_IDENTITY)
+  campaignKey       String?
 
   organization Organization?  @relation(fields: [organizationId], references: [id])
   claims       VoucherClaim[]
+  claimAttempts VoucherClaimAttempt[]
+  campaignIdentityLocks VoucherCampaignIdentityLock[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -328,13 +363,87 @@ model VoucherClaim {
   id         String    @id @default(uuid())
   voucherId  String
   userId     String
+  verifiedIdentityId String?
   status     String    @default("CLAIMED")
   claimedAt  DateTime  @default(now())
   redeemedAt DateTime?
+  campaignKey String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
 
   voucher Voucher @relation(fields: [voucherId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  verifiedIdentity VerifiedIdentity? @relation(fields: [verifiedIdentityId], references: [id])
 
   @@unique([voucherId, userId])
+  @@unique([voucherId, verifiedIdentityId])
+  @@index([campaignKey, verifiedIdentityId])
+  @@index([userId, claimedAt])
+}
+
+model VoucherClaimAttempt {
+  id                 String                    @id @default(uuid())
+  voucherId          String
+  userId             String
+  verifiedIdentityId String?
+  result             VoucherClaimAttemptResult
+  reason             String?
+  ipAddress          String?
+  userAgent          String?
+  metadata           Json?
+
+  voucher           Voucher           @relation(fields: [voucherId], references: [id])
+  user              User              @relation(fields: [userId], references: [id])
+  verifiedIdentity  VerifiedIdentity? @relation(fields: [verifiedIdentityId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([voucherId, createdAt])
+  @@index([userId, createdAt])
+  @@index([verifiedIdentityId, createdAt])
+}
+
+model VerifiedIdentity {
+  id                   String                 @id @default(uuid())
+  documentType         EkycDocumentType
+  documentNumberHash   String
+  documentNumberMasked String
+  fullNameNormalized   String?
+  dateOfBirth          String?
+  provider             String                 @default("VNPT")
+  sourceSessionId      String?
+  riskLevel            EkycRiskLevel          @default(UNKNOWN)
+  status               VerifiedIdentityStatus @default(VERIFIED)
+  metadata             Json?
+
+  users                User[]
+  voucherClaims        VoucherClaim[]
+  voucherClaimAttempts VoucherClaimAttempt[]
+  campaignLocks        VoucherCampaignIdentityLock[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([documentType, documentNumberHash])
+  @@index([status])
+}
+
+model VoucherCampaignIdentityLock {
+  id                 String   @id @default(uuid())
+  campaignKey        String
+  verifiedIdentityId String
+  voucherId          String
+  userId             String
+  createdAt          DateTime @default(now())
+
+  verifiedIdentity VerifiedIdentity @relation(fields: [verifiedIdentityId], references: [id])
+  voucher          Voucher          @relation(fields: [voucherId], references: [id])
+  user             User             @relation(fields: [userId], references: [id])
+
+  @@unique([campaignKey, verifiedIdentityId])
+  @@index([voucherId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model Trend {

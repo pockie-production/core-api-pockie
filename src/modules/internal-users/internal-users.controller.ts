@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Param, Patch, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { RoleCode } from '@prisma/client';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { InternalUsersService } from './internal-users.service';
-import { InternalUsersQueryDto, UpdateInternalUserStatusDto } from './dto/internal-users.dto';
+import { InternalUsersQueryDto, UpdateInternalUserStatusDto, CreateInternalUserDto } from './dto/internal-users.dto';
 
 @ApiTags('Internal Users')
 @ApiBearerAuth()
@@ -37,5 +37,14 @@ export class InternalUsersController {
   @ApiResponse({ status: 200, description: 'User status updated successfully.' })
   async updateUserStatus(@Param('id') id: string, @Body() dto: UpdateInternalUserStatusDto, @Request() req: any) {
     return this.internalUsersService.updateUserStatus(id, req.user.id, dto);
+  }
+
+  @Post()
+  @Roles(RoleCode.SUPER_ADMIN, RoleCode.INTERNAL_ADMIN)
+  @ApiOperation({ summary: 'Create a new internal or end user' })
+  @ApiBody({ type: CreateInternalUserDto })
+  @ApiResponse({ status: 201, description: 'User created successfully.' })
+  async createUser(@Body() dto: CreateInternalUserDto) {
+    return this.internalUsersService.createUser(dto);
   }
 }

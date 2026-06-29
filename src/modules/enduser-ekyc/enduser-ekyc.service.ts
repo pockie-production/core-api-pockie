@@ -3,7 +3,8 @@ import { EkycDecisionService } from '../internal-ekyc/services/ekyc-decision.ser
 import { PrismaService } from '../../prisma/prisma.service';
 import { VnptEkycService } from '../../integrations/vnpt-ekyc/vnpt-ekyc.service';
 import { MinioService } from '../../integrations/minio/minio.service';
-import { EkycSessionStatus, EkycDocumentSide, EkycDocumentType } from '@prisma/client';
+import { EkycSessionStatus, EkycDocumentSide, EkycDocumentType, KycStatus } from '@prisma/client';
+import { VerifiedIdentityService } from '../verified-identity/verified-identity.service';
 
 @Injectable()
 export class EnduserEkycService {
@@ -12,6 +13,7 @@ export class EnduserEkycService {
     private readonly vnptEkycService: VnptEkycService,
     private readonly minioService: MinioService,
     private readonly ekycDecisionService: EkycDecisionService,
+    private readonly verifiedIdentityService: VerifiedIdentityService,
   ) {}
 
   async createSession(userId: string) {
@@ -73,7 +75,7 @@ export class EnduserEkycService {
   async submitSession(sessionId: string, userId: string) {
     const session = await this.prisma.ekycSession.findUnique({ 
       where: { id: sessionId },
-      include: { documents: true }
+      include: { documents: { include: { file: true } } }
     });
     
     if (!session || session.userId !== userId) throw new NotFoundException('Session not found');
@@ -93,14 +95,14 @@ export class EnduserEkycService {
     });
 
     try {
-      if (!frontDoc.fileId || !backDoc.fileId || !selfieDoc.fileId) {
+      if (!frontDoc.file?.objectKey || !backDoc.file?.objectKey || !selfieDoc.file?.objectKey) {
         throw new BadRequestException('Files missing for one or more required documents');
       }
 
       // 1. Fetch buffers from Minio
-      const frontBuffer = await this.minioService.getFileBuffer(frontDoc.fileId);
-      const backBuffer = await this.minioService.getFileBuffer(backDoc.fileId);
-      const selfieBuffer = await this.minioService.getFileBuffer(selfieDoc.fileId);
+      const frontBuffer = await this.minioService.getFileBuffer(frontDoc.file.objectKey);
+      const backBuffer = await this.minioService.getFileBuffer(backDoc.file.objectKey);
+      const selfieBuffer = await this.minioService.getFileBuffer(selfieDoc.file.objectKey);
 
       // 2. Upload to VNPT to get hashes
       const frontVnpt = await this.vnptEkycService.uploadFile(frontBuffer, 'front.jpg', 'Front ID', '', sessionId);
@@ -120,6 +122,7 @@ export class EnduserEkycService {
       ]);
 
       // 4. Save results to DB
+      const ocrFields = this.extractOcrFields(ocrResult.object);
       await this.prisma.$transaction([
         this.prisma.ekycOcrResult.create({
           data: {
@@ -127,6 +130,13 @@ export class EnduserEkycService {
             statusCode: ocrResult.statusCode || 200,
             message: ocrResult.message || '',
             rawResponse: ocrResult.raw_response_json as any,
+            fields: ocrFields.length
+              ? {
+                  createMany: {
+                    data: ocrFields,
+                  },
+                }
+              : undefined,
           }
         }),
         this.prisma.ekycLivenessCardResult.create({
@@ -166,10 +176,45 @@ export class EnduserEkycService {
       // 5. Evaluate Decision
       const decision = await this.ekycDecisionService.evaluateSession(sessionId);
 
-      // 6. Update user KYC status
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { kycStatus: decision.status as any }
+      // 6. Persist decision and attach verified identity atomically
+      await this.prisma.$transaction(async (tx) => {
+        await tx.ekycSession.update({
+          where: { id: sessionId },
+          data: {
+            status: decision.status,
+            finalDecision: decision.finalDecision,
+            riskLevel: decision.riskLevel,
+            decisionReason: decision.reasons.join('; '),
+          },
+        });
+
+        await tx.ekycDecisionLog.create({
+          data: {
+            sessionId,
+            decision: decision.finalDecision,
+            reason: decision.reasons.join('; '),
+          },
+        });
+
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            kycStatus:
+              decision.status === EkycSessionStatus.VERIFIED
+                ? KycStatus.VERIFIED
+                : decision.status === EkycSessionStatus.REJECTED
+                  ? KycStatus.REJECTED
+                  : KycStatus.PENDING,
+          },
+        });
+
+        if (decision.status === EkycSessionStatus.VERIFIED) {
+          await this.verifiedIdentityService.attachVerifiedIdentityToUserFromSession(
+            sessionId,
+            userId,
+            tx,
+          );
+        }
       });
 
       return { success: true, status: decision.status, decision: decision.finalDecision };
@@ -190,5 +235,42 @@ export class EnduserEkycService {
     if (!session) throw new NotFoundException('Session not found');
 
     return session;
+  }
+
+  private extractOcrFields(
+    object?: Record<string, unknown>,
+  ) {
+    if (!object) {
+      return [];
+    }
+
+    const candidates: Array<{ fieldName: string; fieldValue: string | undefined; probability?: number | undefined }> = [
+      { fieldName: 'id', fieldValue: this.readString(object.id), probability: this.readNumber(object.id_prob) },
+      { fieldName: 'name', fieldValue: this.readString(object.name), probability: this.readNumber(object.name_prob) },
+      { fieldName: 'birth_day', fieldValue: this.readString(object.birth_day), probability: this.readNumber(object.birth_day_prob) },
+      { fieldName: 'gender', fieldValue: this.readString(object.gender) },
+      { fieldName: 'nationality', fieldValue: this.readString(object.nationality) },
+      { fieldName: 'origin_location', fieldValue: this.readString(object.origin_location), probability: this.readNumber(object.origin_location_prob) },
+      { fieldName: 'recent_location', fieldValue: this.readString(object.recent_location), probability: this.readNumber(object.recent_location_prob) },
+      { fieldName: 'issue_date', fieldValue: this.readString(object.issue_date), probability: this.readNumber(object.issue_date_prob) },
+      { fieldName: 'valid_date', fieldValue: this.readString(object.valid_date) },
+      { fieldName: 'issue_place', fieldValue: this.readString(object.issue_place), probability: this.readNumber(object.issue_place_prob) },
+    ];
+
+    return candidates
+      .filter((candidate) => candidate.fieldValue)
+      .map((candidate) => ({
+        fieldName: candidate.fieldName,
+        fieldValue: candidate.fieldValue as string,
+        probability: candidate.probability,
+      }));
+  }
+
+  private readString(value: unknown) {
+    return typeof value === 'string' ? value : undefined;
+  }
+
+  private readNumber(value: unknown) {
+    return typeof value === 'number' ? value : undefined;
   }
 }

@@ -18,6 +18,8 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { UsersModule } from './modules/users/users.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { InternalUsersModule } from './modules/internal-users/internal-users.module';
+import { VerifiedIdentityModule } from './modules/verified-identity/verified-identity.module';
+import { VouchersModule } from './modules/vouchers/vouchers.module';
 
 @Module({
   imports: [
@@ -38,6 +40,8 @@ import { InternalUsersModule } from './modules/internal-users/internal-users.mod
     UsersModule,
     AnalyticsModule,
     InternalUsersModule,
+    VerifiedIdentityModule,
+    VouchersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

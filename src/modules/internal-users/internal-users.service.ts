@@ -10,7 +10,9 @@ import {
   InternalUserAccountType,
   InternalUsersQueryDto,
   UpdateInternalUserStatusDto,
+  CreateInternalUserDto,
 } from './dto/internal-users.dto';
+import * as bcrypt from 'bcrypt';
 
 const INTERNAL_ROLES: RoleCode[] = [
   RoleCode.SUPER_ADMIN,
@@ -134,10 +136,6 @@ export class InternalUsersService {
   }
 
   async updateUserStatus(id: string, actorUserId: string, dto: UpdateInternalUserStatusDto) {
-    if (dto.status === UserStatus.DELETED) {
-      throw new BadRequestException('Soft delete is not supported in phase 1.');
-    }
-
     if (id === actorUserId && dto.status !== UserStatus.ACTIVE) {
       throw new ForbiddenException('You cannot suspend your own account.');
     }
@@ -199,6 +197,43 @@ export class InternalUsersService {
     return {
       message: 'User status updated successfully.',
       user: await this.getUserDetail(id),
+    };
+  }
+
+  async createUser(dto: CreateInternalUserDto) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (existingUser) {
+      throw new BadRequestException('Email is already registered.');
+    }
+
+    const salt = await bcrypt.genSalt();
+    const passwordHash = await bcrypt.hash(dto.password, salt);
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        passwordHash,
+        status: UserStatus.ACTIVE,
+        roles: {
+          create: dto.roles.map((role) => ({
+            role: role as RoleCode,
+          })),
+        },
+        profile: {
+          create: {
+            fullName: dto.fullName || dto.email.split('@')[0],
+            displayName: dto.fullName || dto.email.split('@')[0],
+          },
+        },
+      },
+    });
+
+    return {
+      message: 'User created successfully',
+      user: await this.getUserDetail(user.id),
     };
   }
 

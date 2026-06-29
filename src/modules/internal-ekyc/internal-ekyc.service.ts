@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EkycSessionStatus, EkycFinalDecision, KycStatus, RoleCode } from '@prisma/client';
+import { VerifiedIdentityService } from '../verified-identity/verified-identity.service';
 
 @Injectable()
 export class InternalEkycService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly verifiedIdentityService: VerifiedIdentityService,
+  ) {}
 
   async getSessions(query: any) {
     const {
@@ -183,37 +187,39 @@ export class InternalEkycService {
     const session = await this.prisma.ekycSession.findUnique({ where: { id } });
     if (!session) throw new NotFoundException('Session not found');
 
-    await this.prisma.$transaction([
-      this.prisma.ekycSession.update({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ekycSession.update({
         where: { id },
         data: {
           status: EkycSessionStatus.VERIFIED,
           finalDecision: EkycFinalDecision.PASS,
         },
-      }),
-      this.prisma.user.update({
+      });
+
+      await tx.user.update({
         where: { id: session.userId },
         data: { kycStatus: KycStatus.VERIFIED },
-      }),
-      this.prisma.ekycDecisionLog.create({
+      });
+
+      await tx.ekycDecisionLog.create({
         data: {
           sessionId: id,
           decision: EkycFinalDecision.PASS,
           reason: 'Manual approval',
         },
-      }),
-      ...(note
-        ? [
-            this.prisma.ekycInternalNote.create({
-              data: {
-                sessionId: id,
-                authorId: actorId,
-                note,
-              },
-            }),
-          ]
-        : []),
-      this.prisma.adminActionLog.create({
+      });
+
+      if (note) {
+        await tx.ekycInternalNote.create({
+          data: {
+            sessionId: id,
+            authorId: actorId,
+            note,
+          },
+        });
+      }
+
+      await tx.adminActionLog.create({
         data: {
           actorUserId: actorId,
           action: 'EKYC_MANUAL_APPROVE',
@@ -225,8 +231,14 @@ export class InternalEkycService {
             newStatus: EkycSessionStatus.VERIFIED,
           },
         },
-      }),
-    ]);
+      });
+
+      await this.verifiedIdentityService.attachVerifiedIdentityToUserFromSession(
+        id,
+        session.userId,
+        tx,
+      );
+    });
 
     return { message: 'Session approved successfully' };
   }

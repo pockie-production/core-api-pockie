@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { KycStatus, UserStatus } from '@prisma/client';
+import { KycStatus, RoleCode, UserStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { ArrayMinSize, IsArray, IsEmail, IsEnum, IsInt, IsOptional, IsString, MinLength, Max, Min } from 'class-validator';
 
 export enum InternalUserAccountType {
   END_USER = 'end_user',
@@ -75,4 +75,26 @@ export class UpdateInternalUserStatusDto {
   @IsOptional()
   @IsString()
   reason?: string;
+}
+
+export class CreateInternalUserDto {
+  @ApiPropertyOptional({ example: 'admin@example.com' })
+  @IsEmail()
+  email: string;
+
+  @ApiPropertyOptional({ example: 'password123' })
+  @IsString()
+  @MinLength(6)
+  password: string;
+
+  @ApiPropertyOptional({ example: ['SUPER_ADMIN'], type: [String], enum: RoleCode })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsEnum(RoleCode, { each: true })
+  roles: RoleCode[];
+
+  @ApiPropertyOptional({ example: 'Admin User' })
+  @IsOptional()
+  @IsString()
+  fullName?: string;
 }
