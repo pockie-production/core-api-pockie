@@ -20,6 +20,8 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { InternalUsersModule } from './modules/internal-users/internal-users.module';
 import { VerifiedIdentityModule } from './modules/verified-identity/verified-identity.module';
 import { VouchersModule } from './modules/vouchers/vouchers.module';
+import { VnSocialModule } from './integrations/vnsocial/vnsocial.module';
+import { TrendsModule } from './modules/trends/trends.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { VouchersModule } from './modules/vouchers/vouchers.module';
     InternalUsersModule,
     VerifiedIdentityModule,
     VouchersModule,
+    VnSocialModule,
+    TrendsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
