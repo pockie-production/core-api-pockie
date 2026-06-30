@@ -61,6 +61,25 @@ export class CampaignsService {
     return campaign;
   }
 
+  async getActiveCampaigns(skip: number = 0, take: number = 20) {
+    const where: Prisma.CampaignWhereInput = {
+      approvalStatus: 'APPROVED',
+      startsAt: { lte: new Date() },
+      endsAt: { gte: new Date() },
+    };
+
+    const [total, items] = await Promise.all([
+      this.prisma.campaign.count({ where }),
+      this.prisma.campaign.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { endsAt: 'asc' },
+      }),
+    ]);
+    return { total, items };
+  }
+
   async approveCampaign(id: string, checkerId: string) {
     return this.prisma.campaign.update({
       where: { id },

@@ -244,6 +244,32 @@ export class GamificationService {
     });
   }
 
+  async getUserProfile(userId: string) {
+    let profile = await this.prisma.userGamificationProfile.findUnique({
+      where: { userId },
+    });
+    
+    if (!profile) {
+      profile = await this.prisma.userGamificationProfile.create({
+        data: {
+          userId,
+          level: 1,
+          currentXp: 0,
+          totalXp: 0,
+        }
+      });
+    }
+
+    const nextLevelRule = await this.prisma.levelRule.findUnique({
+      where: { level: profile.level + 1 }
+    });
+
+    return {
+      ...profile,
+      nextLevelXpRequired: nextLevelRule?.requiredTotalXp || null,
+    };
+  }
+
   async getAdminProfiles() {
     const profiles = await this.prisma.userGamificationProfile.findMany({
       include: {

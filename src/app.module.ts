@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { CacheModule } from '@nestjs/cache-manager';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -27,6 +30,9 @@ import { CampaignsModule } from './modules/campaigns/campaigns.module';
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    CacheModule.register({ isGlobal: true }),
+    EventEmitterModule.forRoot(),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
     PrismaModule,
     AuthModule,
     InternalAuthModule,

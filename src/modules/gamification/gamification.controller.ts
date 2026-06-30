@@ -17,6 +17,12 @@ export class GamificationController {
     return this.gamificationService.getStreak(req.user.id, targetMonth);
   }
 
+  @Get('gamification/profile')
+  @ApiOperation({ summary: 'Get user gamification profile (XP, Level, Rank)' })
+  async getProfile(@Req() req: any) {
+    return this.gamificationService.getUserProfile(req.user.id);
+  }
+
   @Get('missions/daily')
   @ApiOperation({ summary: 'Get daily missions' })
   async getDailyMissions(@Req() req: any, @Query('date') date: string) {

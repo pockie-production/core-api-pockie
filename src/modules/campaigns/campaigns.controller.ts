@@ -8,7 +8,9 @@ import {
   Query,
   UseGuards,
   Req,
+  UseInterceptors,
 } from '@nestjs/common';
+import { CacheInterceptor, CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -22,6 +24,20 @@ import { CampaignsService } from './campaigns.service';
 @Controller('campaigns')
 export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) {}
+
+  @Get('active')
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(300000) // 5 minutes cache
+  @ApiOperation({ summary: 'End-user: List active campaigns' })
+  async getActiveCampaigns(
+    @Query('skip') skip?: string,
+    @Query('take') take?: string,
+  ) {
+    return this.campaignsService.getActiveCampaigns(
+      skip ? parseInt(skip, 10) : undefined,
+      take ? parseInt(take, 10) : undefined,
+    );
+  }
 
   @Get()
   @Roles(RoleCode.SUPER_ADMIN, RoleCode.INTERNAL_ADMIN)
