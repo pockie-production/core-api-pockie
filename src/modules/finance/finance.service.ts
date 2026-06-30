@@ -25,7 +25,13 @@ export class FinanceService {
       income: '15.240.000đ', incomeDiff: 12,
       expense: '9.850.000đ', expenseDiff: 8,
       balance: '5.390.000đ', balanceDiff: 18,
-      savingsRate: 35, savingsDiff: 5
+      savingsRate: 35, savingsDiff: 5,
+      // For insights.service.ts
+      totalBudget: 15000000,
+      spent: 9850000,
+      remaining: 5150000,
+      spentPercent: 65,
+      currency: 'VND'
     };
   }
 
