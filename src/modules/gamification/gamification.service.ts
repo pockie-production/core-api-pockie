@@ -250,12 +250,25 @@ export class GamificationService {
         user: {
           select: {
             id: true,
-            fullName: true,
-            phoneNumber: true,
+            phone: true,
+            profile: {
+              select: {
+                fullName: true,
+              }
+            }
           }
         }
       },
       orderBy: { totalXp: 'desc' },
     });
+    
+    return profiles.map(p => ({
+      ...p,
+      user: {
+        id: p.user.id,
+        fullName: p.user.profile?.fullName || 'Unknown',
+        phoneNumber: p.user.phone,
+      }
+    }));
   }
 }
