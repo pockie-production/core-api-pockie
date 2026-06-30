@@ -108,4 +108,17 @@ export class FinanceService {
 
     return { items };
   }
+
+  async getAccounts(userId: string) {
+    // Currently, there is no Account model in Prisma, so we mock this for now
+    // to satisfy the frontend until the database schema is updated.
+    return {
+      accounts: [
+        { id: 'w1', type: 'mb', name: 'MB Bank', balance: '3.200.000đ', accountNumber: '•••• 0897', isPrimary: true },
+        { id: 'w2', type: 'momo', name: 'Ví MoMo', balance: '520.000đ', accountNumber: '•••• 1234', isPrimary: false },
+        { id: 'w3', type: 'zalopay', name: 'ZaloPay', balance: '340.000đ', accountNumber: '•••• 4321', isPrimary: false },
+        { id: 'w4', type: 'cash', name: 'Tiền mặt', balance: '1.500.000đ', accountNumber: 'Ví tiền mặt', isPrimary: false }
+      ]
+    };
+  }
 }

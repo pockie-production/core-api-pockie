@@ -30,4 +30,10 @@ export class FinanceController {
     const targetMonth = month || new Date().toISOString().slice(0, 7);
     return this.financeService.getCategoryStats(req.user.id, targetMonth);
   }
+
+  @Get('wallets/accounts')
+  @ApiOperation({ summary: 'Get list of wallet accounts' })
+  async getAccounts(@Req() req: any) {
+    return this.financeService.getAccounts(req.user.id);
+  }
 }
