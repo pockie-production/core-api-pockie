@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   KycStatus,
@@ -106,15 +107,21 @@ export class VouchersService {
   }
 
   async createVoucher(data: Prisma.VoucherCreateInput, creatorId: string) {
+    if (data.campaignKey === '') data.campaignKey = null;
+    if (data.claimScope === 'PER_CAMPAIGN_IDENTITY' && !data.campaignKey) {
+      throw new BadRequestException('campaignKey is required when claimScope is PER_CAMPAIGN_IDENTITY');
+    }
     return this.prisma.voucher.create({
       data: {
         ...data,
+        remainingQuantity: data.totalQuantity ?? data.remainingQuantity,
         approvalStatus: 'PENDING',
       },
     });
   }
 
   async updateVoucher(id: string, data: Prisma.VoucherUpdateInput, updaterId: string) {
+    if (data.campaignKey === '') data.campaignKey = null;
     // If it's updated, it goes back to pending
     return this.prisma.voucher.update({
       where: { id },
