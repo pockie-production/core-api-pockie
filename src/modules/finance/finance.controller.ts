@@ -36,4 +36,10 @@ export class FinanceController {
   async getAccounts(@Req() req: any) {
     return this.financeService.getAccounts(req.user.id);
   }
+
+  @Get('reports/trends')
+  @ApiOperation({ summary: 'Get reports trends' })
+  async getTrends(@Req() req: any) {
+    return this.financeService.getTrends(req.user.id);
+  }
 }
