@@ -22,6 +22,7 @@ import { VerifiedIdentityModule } from './modules/verified-identity/verified-ide
 import { VouchersModule } from './modules/vouchers/vouchers.module';
 import { VnSocialModule } from './integrations/vnsocial/vnsocial.module';
 import { TrendsModule } from './modules/trends/trends.module';
+import { CampaignsModule } from './modules/campaigns/campaigns.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { TrendsModule } from './modules/trends/trends.module';
     VouchersModule,
     VnSocialModule,
     TrendsModule,
+    CampaignsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

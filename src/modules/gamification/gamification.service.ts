@@ -205,4 +205,57 @@ export class GamificationService {
       };
     });
   }
+
+  // --- Admin Methods ---
+
+  async getAdminMissions() {
+    return this.prisma.mission.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createAdminMission(data: any) {
+    return this.prisma.mission.create({
+      data: {
+        code: data.code,
+        title: data.title,
+        description: data.description,
+        missionType: data.missionType || 'DAILY',
+        targetValue: data.targetValue || 1,
+        xpReward: data.xpReward || 0,
+        status: data.status || 'ACTIVE',
+        metadata: data.metadata || {},
+      },
+    });
+  }
+
+  async updateAdminMission(id: string, data: any) {
+    return this.prisma.mission.update({
+      where: { id },
+      data: {
+        title: data.title,
+        description: data.description,
+        missionType: data.missionType,
+        targetValue: data.targetValue,
+        xpReward: data.xpReward,
+        status: data.status,
+        metadata: data.metadata,
+      },
+    });
+  }
+
+  async getAdminProfiles() {
+    return this.prisma.userGamificationProfile.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            phoneNumber: true,
+          }
+        }
+      },
+      orderBy: { totalXp: 'desc' },
+    });
+  }
 }

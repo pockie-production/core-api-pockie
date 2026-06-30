@@ -78,6 +78,13 @@ enum CampaignStatus {
   ARCHIVED
 }
 
+enum ApprovalStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum VnSocialProjectType {
   TOPIC_POLICY
   PERSONAL_POST
@@ -369,6 +376,8 @@ model Voucher {
   requiresKyc       Boolean   @default(true)
   claimScope        VoucherClaimScope @default(PER_VERIFIED_IDENTITY)
   campaignKey       String?
+  approvalStatus    ApprovalStatus @default(DRAFT)
+  approvedBy        String?
 
   organization Organization?  @relation(fields: [organizationId], references: [id])
   claims       VoucherClaim[]
@@ -643,6 +652,8 @@ model Campaign {
   name           String
   objective      String?
   status         CampaignStatus @default(DRAFT)
+  approvalStatus ApprovalStatus @default(DRAFT)
+  approvedBy     String?
   configJson     Json?
   startsAt       DateTime?
   endsAt         DateTime?

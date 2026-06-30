@@ -40,6 +40,7 @@ export class VouchersService {
       }),
       this.prisma.voucher.findMany({
         where: {
+          approvalStatus: 'APPROVED',
           AND: [
             {
               OR: [{ startsAt: null }, { startsAt: { lte: now } }],
@@ -78,6 +79,73 @@ export class VouchersService {
       }),
     );
   }
+
+  // --- ADMIN API ---
+
+  async listVouchersForAdmin(params?: { skip?: number; take?: number; search?: string; status?: string }) {
+    const { skip = 0, take = 20, search, status } = params || {};
+    const where: Prisma.VoucherWhereInput = {};
+    if (search) {
+      where.title = { contains: search, mode: 'insensitive' };
+    }
+    if (status) {
+      where.approvalStatus = status as any;
+    }
+    
+    const [total, items] = await Promise.all([
+      this.prisma.voucher.count({ where }),
+      this.prisma.voucher.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+    
+    return { total, items };
+  }
+
+  async createVoucher(data: Prisma.VoucherCreateInput, creatorId: string) {
+    return this.prisma.voucher.create({
+      data: {
+        ...data,
+        approvalStatus: 'PENDING',
+      },
+    });
+  }
+
+  async updateVoucher(id: string, data: Prisma.VoucherUpdateInput, updaterId: string) {
+    // If it's updated, it goes back to pending
+    return this.prisma.voucher.update({
+      where: { id },
+      data: {
+        ...data,
+        approvalStatus: 'PENDING',
+      },
+    });
+  }
+
+  async approveVoucher(id: string, checkerId: string) {
+    return this.prisma.voucher.update({
+      where: { id },
+      data: {
+        approvalStatus: 'APPROVED',
+        approvedBy: checkerId,
+      },
+    });
+  }
+
+  async rejectVoucher(id: string, checkerId: string) {
+    return this.prisma.voucher.update({
+      where: { id },
+      data: {
+        approvalStatus: 'REJECTED',
+        approvedBy: checkerId,
+      },
+    });
+  }
+
+  // --- END ADMIN API ---
 
   async listMyClaims(userId: string) {
     return this.prisma.voucherClaim.findMany({
@@ -265,9 +333,16 @@ export class VouchersService {
     userId: string,
     kycStatus: KycStatus,
     verifiedIdentityId: string | null,
-    voucher: Voucher,
+    voucher: Voucher & { approvalStatus?: string },
   ) {
     const now = new Date();
+
+    if (voucher.approvalStatus && voucher.approvalStatus !== 'APPROVED') {
+      return this.rejected(
+        VoucherClaimAttemptResult.REJECTED_INACTIVE,
+        'Voucher này chưa được phê duyệt hoặc đã bị hủy.',
+      );
+    }
 
     if (voucher.startsAt && voucher.startsAt > now) {
       return this.rejected(
