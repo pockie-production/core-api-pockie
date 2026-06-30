@@ -1,126 +1,366 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
+type DateRange = {
+  start: Date;
+  end: Date;
+};
+
 @Injectable()
 export class FinanceService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getWalletsOverview(userId: string, month: string) {
+    const currentRange = this.getMonthRange(month);
+    const previousRange = this.getPreviousMonthRange(month);
+
+    const [wallets, currentTransactions, previousTransactions, monthlyBudget, monthlySummary] = await Promise.all([
+      this.prisma.wallet.findMany({
+        where: { userId, status: 'ACTIVE' },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.financialTransaction.findMany({
+        where: {
+          userId,
+          deletedAt: null,
+          transactionDate: {
+            gte: currentRange.start,
+            lt: currentRange.end,
+          },
+        },
+      }),
+      this.prisma.financialTransaction.findMany({
+        where: {
+          userId,
+          deletedAt: null,
+          transactionDate: {
+            gte: previousRange.start,
+            lt: previousRange.end,
+          },
+        },
+      }),
+      this.prisma.monthlyBudget.findUnique({
+        where: {
+          userId_month: {
+            userId,
+            month,
+          },
+        },
+      }),
+      this.prisma.monthlyFinancialSummary.findUnique({
+        where: {
+          userId_month: {
+            userId,
+            month,
+          },
+        },
+      }),
+    ]);
+
+    const totalBalance = wallets.reduce((sum, wallet) => sum + this.toNumber(wallet.balance), 0);
+    const currentIncome = this.sumTransactionsByType(currentTransactions, 'INCOME');
+    const currentExpense = this.sumTransactionsByType(currentTransactions, 'EXPENSE');
+    const previousIncome = this.sumTransactionsByType(previousTransactions, 'INCOME');
+    const previousExpense = this.sumTransactionsByType(previousTransactions, 'EXPENSE');
+
+    const totalBudget = monthlyBudget
+      ? this.toNumber(monthlyBudget.totalBudget)
+      : monthlySummary
+        ? this.toNumber(monthlySummary.totalBudget)
+        : Math.max(currentIncome, currentExpense, totalBalance, 0);
+    const remaining = Math.max(totalBudget - currentExpense, 0);
+    const spentPercent = totalBudget > 0 ? Math.min(100, Math.round((currentExpense / totalBudget) * 100)) : 0;
+    const previousNet = previousIncome - previousExpense;
+    const currentNet = currentIncome - currentExpense;
+
+    const allocations = this.buildAllocations(wallets, totalBalance);
+
     return {
       month,
-      // For Wallet/index.tsx
-      allocations: [
-        { id: 'bank', title: 'Ngân hàng', percent: 60, amount: '3.912.000đ', color: 'var(--color-yellow)', offset: -25 },
-        { id: 'cash', title: 'Tiền mặt', percent: 25, amount: '1.630.000đ', color: 'var(--color-mint)', offset: 0 },
-        { id: 'ewallet', title: 'Ví điện tử', percent: 15, amount: '978.000đ', color: 'var(--color-text-muted)', offset: -85 }
-      ],
+      allocations,
       summary: {
-        balance: '6.520.000đ',
-        diffAmount: '+850.000đ',
-        diffType: 'up',
-        income: '4.500.000đ',
-        expense: '3.650.000đ',
-        savingsPercent: 19
+        balance: this.formatCurrency(totalBalance),
+        diffAmount: this.formatSignedCurrency(currentNet - previousNet),
+        diffType: currentNet - previousNet >= 0 ? 'up' : 'down',
+        income: this.formatCurrency(currentIncome),
+        expense: this.formatCurrency(currentExpense),
+        savingsPercent: currentIncome > 0 ? Math.max(0, Math.round(((currentIncome - currentExpense) / currentIncome) * 100)) : 0,
       },
-      // For Reports/index.tsx
-      income: '15.240.000đ', incomeDiff: 12,
-      expense: '9.850.000đ', expenseDiff: 8,
-      balance: '5.390.000đ', balanceDiff: 18,
-      savingsRate: 35, savingsDiff: 5,
-      // For insights.service.ts
-      totalBudget: 15000000,
-      spent: 9850000,
-      remaining: 5150000,
-      spentPercent: 65,
-      currency: 'VND'
+      income: this.formatCurrency(currentIncome),
+      incomeDiff: this.getPercentDelta(currentIncome, previousIncome),
+      expense: this.formatCurrency(currentExpense),
+      expenseDiff: this.getPercentDelta(currentExpense, previousExpense),
+      balance: this.formatCurrency(currentNet),
+      balanceDiff: this.getPercentDelta(currentNet, previousNet),
+      savingsRate: currentIncome > 0 ? Math.max(0, Math.round(((currentIncome - currentExpense) / currentIncome) * 100)) : 0,
+      savingsDiff: this.getPercentDelta(
+        currentIncome > 0 ? ((currentIncome - currentExpense) / currentIncome) * 100 : 0,
+        previousIncome > 0 ? ((previousIncome - previousExpense) / previousIncome) * 100 : 0,
+      ),
+      totalBudget,
+      spent: currentExpense,
+      remaining,
+      spentPercent,
+      currency: wallets[0]?.currency || 'VND',
     };
   }
 
   async getRecentTransactions(userId: string, limit: number) {
-    return [
-      {
-        id: '1',
-        title: 'Highlands Coffee',
-        category: 'Ăn uống',
-        icon: null,
-        amount: 55000,
-        currency: 'VND',
-        transactionDate: new Date().toISOString(),
+    const transactions = await this.prisma.financialTransaction.findMany({
+      where: {
+        userId,
+        deletedAt: null,
       },
-      {
-        id: '2',
-        title: 'Lương tháng 4',
-        category: 'Thu nhập',
-        icon: null,
-        amount: 15500000,
-        currency: 'VND',
-        transactionDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      include: {
+        category: true,
       },
-      {
-        id: '3',
-        title: 'Shopee',
-        category: 'Mua sắm',
-        icon: null,
-        amount: 340000,
-        currency: 'VND',
-        transactionDate: new Date('2024-04-12T20:15:00+07:00').toISOString(),
+      orderBy: {
+        transactionDate: 'desc',
       },
-      {
-        id: '4',
-        title: 'GrabBike',
-        category: 'Đi lại',
-        icon: null,
-        amount: 25000,
-        currency: 'VND',
-        transactionDate: new Date('2024-04-12T08:15:00+07:00').toISOString(),
-      },
-      {
-        id: '5',
-        title: 'Spotify Premium',
-        category: 'Giải trí',
-        icon: null,
-        amount: 59000,
-        currency: 'VND',
-        transactionDate: new Date('2024-04-10T09:00:00+07:00').toISOString(),
-      },
-    ].slice(0, limit);
+      take: limit,
+    });
+
+    return transactions.map((transaction) => {
+      const amount = this.toNumber(transaction.amount);
+      const type = transaction.transactionType === 'INCOME' ? 'income' : 'expense';
+
+      return {
+        id: transaction.id,
+        title: transaction.title,
+        category: transaction.category?.name || 'Khac',
+        icon: transaction.category?.icon || null,
+        amount,
+        currency: transaction.currency || 'VND',
+        transactionDate: transaction.transactionDate.toISOString(),
+        date: this.formatTransactionDate(transaction.transactionDate),
+        type,
+        iconUrl: null,
+      };
+    });
   }
 
   async getCategoryStats(userId: string, month: string) {
-    return {
-      items: [
-        { categoryId: 'food', categoryName: 'Ăn uống', icon: '🍔', percent: 38, amount: 3743000 },
-        { categoryId: 'shopping', categoryName: 'Mua sắm', icon: '🛍️', percent: 20, amount: 1970000 },
-        { categoryId: 'transport', categoryName: 'Đi lại', icon: '🚌', percent: 15, amount: 1478000 },
-        { categoryId: 'entertainment', categoryName: 'Giải trí', icon: '🎮', percent: 10, amount: 985000 },
-        { categoryId: 'bills', categoryName: 'Hóa đơn', icon: '🧾', percent: 8, amount: 788000 },
-        { categoryId: 'other', categoryName: 'Khác', icon: '📦', percent: 9, amount: 886000 }
-      ]
-    };
+    const range = this.getMonthRange(month);
+    const transactions = await this.prisma.financialTransaction.findMany({
+      where: {
+        userId,
+        deletedAt: null,
+        transactionType: 'EXPENSE',
+        transactionDate: {
+          gte: range.start,
+          lt: range.end,
+        },
+      },
+      include: {
+        category: true,
+      },
+    });
+
+    const totalExpense = transactions.reduce((sum, transaction) => sum + this.toNumber(transaction.amount), 0);
+    const categoryMap = new Map<string, { amount: number; categoryName: string; icon: string | null }>();
+
+    for (const transaction of transactions) {
+      const key = transaction.categoryId;
+      const current = categoryMap.get(key) || {
+        amount: 0,
+        categoryName: transaction.category?.name || 'Khac',
+        icon: transaction.category?.icon || null,
+      };
+
+      current.amount += this.toNumber(transaction.amount);
+      categoryMap.set(key, current);
+    }
+
+    const items = Array.from(categoryMap.entries())
+      .map(([categoryId, value]) => ({
+        categoryId,
+        categoryName: value.categoryName,
+        icon: value.icon,
+        amount: Math.round(value.amount),
+        percent: totalExpense > 0 ? Math.round((value.amount / totalExpense) * 100) : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
+    return { items };
   }
 
   async getAccounts(userId: string) {
+    const wallets = await this.prisma.wallet.findMany({
+      where: { userId, status: 'ACTIVE' },
+      orderBy: [{ balance: 'desc' }, { createdAt: 'asc' }],
+    });
+
+    const primaryWalletId = wallets[0]?.id;
+
     return {
-      accounts: [
-        { id: 'w1', type: 'mb', name: 'MB Bank', balance: '3.200.000đ', accountNumber: '•••• 0897', isPrimary: true },
-        { id: 'w2', type: 'momo', name: 'Ví MoMo', balance: '520.000đ', accountNumber: '•••• 1234', isPrimary: false },
-        { id: 'w3', type: 'zalopay', name: 'ZaloPay', balance: '340.000đ', accountNumber: '•••• 4321', isPrimary: false },
-        { id: 'w4', type: 'cash', name: 'Tiền mặt', balance: '1.500.000đ', accountNumber: 'Ví tiền mặt', isPrimary: false }
-      ]
+      accounts: wallets.map((wallet) => ({
+        id: wallet.id,
+        type: this.mapWalletType(wallet.walletType),
+        name: wallet.name,
+        balance: this.formatCurrency(this.toNumber(wallet.balance), wallet.currency),
+        accountNumber: wallet.walletType === 'CASH' ? 'Vi tien mat' : `•••• ${wallet.id.slice(-4)}`,
+        isPrimary: wallet.id === primaryWalletId,
+      })),
     };
   }
 
   async getTrends(userId: string) {
-    return [
-      { date: '01/05', income: 12, expense: 9 },
-      { date: '04/05', income: 14, expense: 8 },
-      { date: '08/05', income: 13, expense: 10 },
-      { date: '12/05', income: 15, expense: 7 },
-      { date: '16/05', income: 20, expense: 6 },
-      { date: '20/05', income: 14, expense: 8 },
-      { date: '24/05', income: 11, expense: 4 },
-      { date: '28/05', income: 14, expense: 7 },
-      { date: '31/05', income: 16, expense: 8 },
+    const month = new Date().toISOString().slice(0, 7);
+    const range = this.getMonthRange(month);
+    const transactions = await this.prisma.financialTransaction.findMany({
+      where: {
+        userId,
+        deletedAt: null,
+        transactionDate: {
+          gte: range.start,
+          lt: range.end,
+        },
+      },
+      orderBy: {
+        transactionDate: 'asc',
+      },
+    });
+
+    const dailyMap = new Map<string, { income: number; expense: number }>();
+    for (const transaction of transactions) {
+      const key = transaction.transactionDate.toISOString().slice(0, 10);
+      const current = dailyMap.get(key) || { income: 0, expense: 0 };
+      if (transaction.transactionType === 'INCOME') {
+        current.income += this.toNumber(transaction.amount);
+      } else {
+        current.expense += this.toNumber(transaction.amount);
+      }
+      dailyMap.set(key, current);
+    }
+
+    const points: Array<{ date: string; income: number; expense: number }> = [];
+    for (let cursor = new Date(range.start); cursor < range.end; cursor.setDate(cursor.getDate() + 1)) {
+      const key = cursor.toISOString().slice(0, 10);
+      const daily = dailyMap.get(key) || { income: 0, expense: 0 };
+      points.push({
+        date: this.formatShortDate(cursor),
+        income: Math.round(daily.income / 1_000_000),
+        expense: Math.round(daily.expense / 1_000_000),
+      });
+    }
+
+    return points.length > 0 ? points : [
+      { date: '01/01', income: 0, expense: 0 },
+      { date: '02/01', income: 0, expense: 0 },
     ];
+  }
+
+  private buildAllocations(
+    wallets: Array<{ id: string; name: string; walletType: string; currency: string; balance: unknown }>,
+    totalBalance: number,
+  ) {
+    return wallets.map((wallet, index) => {
+      const balance = this.toNumber(wallet.balance);
+      const percent = totalBalance > 0 ? Math.round((balance / totalBalance) * 100) : 0;
+
+      return {
+        id: wallet.id,
+        title: wallet.name,
+        percent,
+        amount: this.formatCurrency(balance, wallet.currency),
+        color: this.getWalletColor(index),
+        offset: this.getWalletOffset(index),
+      };
+    });
+  }
+
+  private getMonthRange(month: string): DateRange {
+    const [year, monthValue] = month.split('-').map(Number);
+    const start = new Date(year, monthValue - 1, 1);
+    const end = new Date(year, monthValue, 1);
+    return { start, end };
+  }
+
+  private getPreviousMonthRange(month: string): DateRange {
+    const [year, monthValue] = month.split('-').map(Number);
+    const start = new Date(year, monthValue - 2, 1);
+    const end = new Date(year, monthValue - 1, 1);
+    return { start, end };
+  }
+
+  private sumTransactionsByType(
+    transactions: Array<{ amount: unknown; transactionType: string }>,
+    type: 'INCOME' | 'EXPENSE',
+  ) {
+    return transactions
+      .filter((transaction) => transaction.transactionType === type)
+      .reduce((sum, transaction) => sum + this.toNumber(transaction.amount), 0);
+  }
+
+  private getPercentDelta(current: number, previous: number) {
+    if (previous === 0) {
+      return current === 0 ? 0 : 100;
+    }
+
+    return Math.round(((current - previous) / Math.abs(previous)) * 100);
+  }
+
+  private toNumber(value: unknown) {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') return Number(value);
+    if (value && typeof value === 'object' && 'toNumber' in value && typeof (value as { toNumber: () => number }).toNumber === 'function') {
+      return (value as { toNumber: () => number }).toNumber();
+    }
+    return Number(value || 0);
+  }
+
+  private formatCurrency(value: number, currency = 'VND') {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }).format(value);
+  }
+
+  private formatSignedCurrency(value: number, currency = 'VND') {
+    const sign = value >= 0 ? '+' : '-';
+    return `${sign}${this.formatCurrency(Math.abs(value), currency)}`;
+  }
+
+  private formatTransactionDate(date: Date) {
+    return new Intl.DateTimeFormat('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  }
+
+  private formatShortDate(date: Date) {
+    return new Intl.DateTimeFormat('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+    }).format(date);
+  }
+
+  private mapWalletType(walletType: string) {
+    const normalized = walletType.toUpperCase();
+    if (normalized.includes('MB')) return 'mb';
+    if (normalized.includes('MOMO')) return 'momo';
+    if (normalized.includes('ZALO')) return 'zalopay';
+    if (normalized.includes('CASH')) return 'cash';
+    return 'cash';
+  }
+
+  private getWalletColor(index: number) {
+    const colors = [
+      'var(--color-yellow)',
+      'var(--color-mint)',
+      'var(--color-text-muted)',
+      '#93C5FD',
+      '#F9A8D4',
+    ];
+    return colors[index % colors.length];
+  }
+
+  private getWalletOffset(index: number) {
+    const offsets = [-25, 0, -85, -45, -110];
+    return offsets[index % offsets.length];
   }
 }

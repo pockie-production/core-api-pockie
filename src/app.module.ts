@@ -26,6 +26,7 @@ import { VouchersModule } from './modules/vouchers/vouchers.module';
 import { VnSocialModule } from './integrations/vnsocial/vnsocial.module';
 import { TrendsModule } from './modules/trends/trends.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
+import { AiModule } from './modules/ai/ai.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { CampaignsModule } from './modules/campaigns/campaigns.module';
     VnSocialModule,
     TrendsModule,
     CampaignsModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],
