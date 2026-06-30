@@ -245,7 +245,7 @@ export class GamificationService {
   }
 
   async getAdminProfiles() {
-    return this.prisma.userGamificationProfile.findMany({
+    const profiles = await this.prisma.userGamificationProfile.findMany({
       include: {
         user: {
           select: {
