@@ -7,6 +7,7 @@ export class FinanceService {
 
   async getWalletsOverview(userId: string, month: string) {
     return {
+      month,
       // For Wallet/index.tsx
       allocations: [
         { id: 'bank', title: 'Ngân hàng', percent: 60, amount: '3.912.000đ', color: 'var(--color-yellow)', offset: -25 },
