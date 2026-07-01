@@ -24,6 +24,7 @@ import { InternalUsersModule } from './modules/internal-users/internal-users.mod
 import { VerifiedIdentityModule } from './modules/verified-identity/verified-identity.module';
 import { VouchersModule } from './modules/vouchers/vouchers.module';
 import { VnSocialModule } from './integrations/vnsocial/vnsocial.module';
+import { VnptSmartbotModule } from './integrations/vnpt-smartbot/vnpt-smartbot.module';
 import { TrendsModule } from './modules/trends/trends.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { AiModule } from './modules/ai/ai.module';
@@ -53,6 +54,7 @@ import { AiModule } from './modules/ai/ai.module';
     VerifiedIdentityModule,
     VouchersModule,
     VnSocialModule,
+    VnptSmartbotModule,
     TrendsModule,
     CampaignsModule,
     AiModule,
