@@ -1,4 +1,5 @@
 import { HttpService } from '@nestjs/axios';
+import type { AxiosResponse } from 'axios';
 import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { lastValueFrom } from 'rxjs';
 
@@ -110,7 +111,7 @@ export class VnptSmartbotService {
     const response = await this.requestWithRetry(async () => {
       const headers = await this.buildHeaders();
       return lastValueFrom(
-        this.httpService.post<SmartbotResponse>(
+        this.httpService.post(
           `${this.baseUrl}${this.endpoint}`,
           {
             sender_id: input.senderId,
@@ -124,12 +125,15 @@ export class VnptSmartbotService {
               advance_prompt: input.advancePrompt || '',
             },
           },
-          { headers },
+          {
+            headers,
+            responseType: 'text',
+          },
         ),
       );
     });
 
-    const raw = response.data || {};
+    const raw = this.parseSmartbotResponse(response) || {};
     const cardData = raw.object?.sb?.card_data || [];
     const replyText = this.buildReplyText(cardData);
 
@@ -147,7 +151,9 @@ export class VnptSmartbotService {
       'Token-id': this.tokenId,
       'Token-key': this.tokenKey,
       'Content-Type': 'application/json',
-      Accept: 'application/json',
+      Accept: 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
     };
   }
 
@@ -221,6 +227,47 @@ export class VnptSmartbotService {
 
   private normalizeBearerToken(value: string) {
     return value.replace(/^Bearer\s+/i, '').trim();
+  }
+
+  private parseSmartbotResponse(response: AxiosResponse<unknown>): SmartbotResponse | null {
+    const payload = response.data;
+
+    if (payload && typeof payload === 'object') {
+      return payload as SmartbotResponse;
+    }
+
+    if (typeof payload !== 'string') {
+      return null;
+    }
+
+    const trimmed = payload.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(trimmed) as SmartbotResponse;
+    } catch {
+      // Try parsing SSE frames.
+    }
+
+    const sseDataChunks = trimmed
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim())
+      .filter(Boolean);
+
+    for (let index = sseDataChunks.length - 1; index >= 0; index -= 1) {
+      try {
+        return JSON.parse(sseDataChunks[index]) as SmartbotResponse;
+      } catch {
+        continue;
+      }
+    }
+
+    this.logger.warn(`Unable to parse SmartBot response payload: ${trimmed.slice(0, 400)}`);
+    return null;
   }
 
   private buildReplyText(cardData: SmartbotCardData[]) {
